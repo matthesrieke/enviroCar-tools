@@ -1,0 +1,160 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>org.envirocar.analyse</groupId>
+	<artifactId>envirocar-point-aggregation</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<packaging>war</packaging>
+	<name>envirocar-point-aggregation</name>
+	<properties>
+<!-- 		<wps.version>3.3.0</wps.version> -->
+		<geotools.version>8.7</geotools.version>
+		<jackson.version>2.1.4</jackson.version>
+	</properties>
+	<repositories>
+		<repository>
+			<id>osgeo</id>
+			<name>Open Source Geospatial Foundation Repository</name>
+			<url>http://download.osgeo.org/webdav/geotools/</url>
+		</repository>
+		<repository>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+			<id>opengeo</id>
+			<name>OpenGeo Maven Repository</name>
+			<url>http://repo.opengeo.org</url>
+		</repository>
+	</repositories>
+	<dependencies>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.11</version>
+			<scope>test</scope>
+		</dependency>
+<!-- 		<dependency> -->
+<!-- 			<groupId>org.n52.wps</groupId> -->
+<!-- 			<artifactId>52n-wps-algorithm</artifactId> -->
+<!-- 			<version>${wps.version}</version> -->
+<!-- 			<type>jar</type> -->
+<!-- 			<scope>compile</scope> -->
+<!-- 		</dependency> -->
+<!-- 		<dependency> -->
+<!-- 			<groupId>org.n52.wps</groupId> -->
+<!-- 			<artifactId>52n-wps-webapp</artifactId> -->
+<!-- 			<version>${wps.version}</version> -->
+<!-- 			<type>war</type> -->
+<!-- 			<scope>compile</scope> -->
+<!-- 		</dependency> -->
+<!-- 		<dependency> -->
+<!-- 			<groupId>org.n52.wps</groupId> -->
+<!-- 			<artifactId>52n-wps-io</artifactId> -->
+<!-- 			<version>${wps.version}</version> -->
+<!-- 			<type>jar</type> -->
+<!-- 			<scope>compile</scope> -->
+<!-- 		</dependency> -->
+<!-- 		<dependency> -->
+<!-- 			<groupId>org.n52.wps</groupId> -->
+<!-- 			<artifactId>52n-wps-io-geotools</artifactId> -->
+<!-- 			<version>${wps.version}</version> -->
+<!-- 			<type>jar</type> -->
+<!-- 			<scope>compile</scope> -->
+<!-- 		</dependency> -->
+<!-- 		<dependency> -->
+<!-- 			<groupId>org.geotools</groupId> -->
+<!-- 			<artifactId>gt-referencing</artifactId> -->
+<!-- 			<version>${geotools.version}</version> -->
+<!-- 		</dependency> -->
+<!-- 		<dependency> -->
+<!-- 			<groupId>org.geotools</groupId> -->
+<!-- 			<artifactId>gt-epsg-hsql</artifactId> -->
+<!-- 			<version>${geotools.version}</version> -->
+<!-- 		</dependency> -->
+<!-- 		<dependency> -->
+<!-- 			<groupId>org.geotools</groupId> -->
+<!-- 			<artifactId>gt-epsg-extension</artifactId> -->
+<!-- 			<version>${geotools.version}</version> -->
+<!-- 		</dependency> -->
+		<dependency>
+			<artifactId>jts</artifactId>
+			<groupId>com.vividsolutions</groupId>
+			<version>1.13</version>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-core</artifactId>
+			<version>${jackson.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>${jackson.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-annotations</artifactId>
+			<version>${jackson.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-classic</artifactId>
+			<version>1.0.13</version>
+		</dependency>
+		<dependency>
+			<groupId>org.postgresql.driver</groupId>
+			<artifactId>postgresql-jdbc-driver</artifactId>
+			<version>1.0.0</version>
+		</dependency>
+        <dependency>
+            <artifactId>mongo-java-driver</artifactId>
+            <groupId>org.mongodb</groupId>
+            <version>2.11.1</version>
+        </dependency>
+	</dependencies>
+	<build>
+		<finalName>envirocar-wps</finalName>
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+				<includes>
+					<include>**/*</include>
+				</includes>
+			</resource>
+		</resources>
+		<plugins>
+			<plugin>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<source>1.7</source>
+					<target>1.7</target>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>com.mycila.maven-license-plugin</groupId>
+				<artifactId>maven-license-plugin</artifactId>
+				<inherited>false</inherited>
+				<configuration>
+					<header>misc/licenses/license_header.txt</header>
+					<aggregate>true</aggregate>
+					<includes>
+						<include>**/*.java</include>
+					</includes>
+					<properties>
+						<year>${project.inceptionYear}</year>
+					</properties>
+					<strictCheck>true</strictCheck>
+				</configuration>
+				<executions>
+					<execution>
+						<id>check-headers</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>
