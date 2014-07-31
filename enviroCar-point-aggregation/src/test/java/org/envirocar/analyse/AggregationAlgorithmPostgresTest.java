@@ -17,7 +17,7 @@ public class AggregationAlgorithmPostgresTest {
 //		double minx = 7.6224;
 //		double miny = 51.94799;
 		        
-        new AggregationAlgorithm(minx, miny, maxx, maxy, 0.001).runAlgorithm();
+        new AggregationAlgorithm(minx, miny, maxx, maxy, 0.00045).runAlgorithm();
 		
 	}
 }

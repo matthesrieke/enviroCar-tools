@@ -172,7 +172,7 @@ public class AggregationAlgorithm {
         
 		URL url = null;
 		try {		
-			url = new URL(Properties.requestTracksWithinBboxURL + minx + "," + miny + "," + maxx + "," + maxy);
+			url = new URL(Properties.getRequestTracksWithinBboxURL() + minx + "," + miny + "," + maxx + "," + maxy);
 			
 			InputStream in = url.openStream();
 

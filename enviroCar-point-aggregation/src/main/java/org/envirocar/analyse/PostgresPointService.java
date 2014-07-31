@@ -36,16 +36,14 @@ public class PostgresPointService implements PointService {
 
 	private Connection conn = null;
 	private String connectionURL = null;
-	private String databaseName = "postgres";// TODO from properties
-	private String databasePath = "//192.168.136.133:5432";// TODO from
-															// properties
-	private String username = "postgres";// TODO from properties
-	private String password = "pOEdesoTL52oZg67yDFv";// TODO from properties
+	private String databaseName;
+	private String databasePath;
+															
+	private String username;
+	private String password;
 	private String aggregated_MeasurementsTableName = "aggregated_measurements";// TODO
 	private String original_MeasurementsTableName = "original_measurements";// TODO from
 																				// properties
-	private String spatial_ref_sysTableName = "spatial_ref_sys";
-	private String geometry_columnsTableName = "geometry_columns";
 	private String spatial_ref_sys = "4326";// TODO from properties
 	private String id_exp = "$id$";
 	private String distance_exp = "$distance$";
@@ -67,31 +65,6 @@ public class PostgresPointService implements PointService {
 			+ "TRACKID VARCHAR(24)," + "CO2 DOUBLE PRECISION,"
 			+ "SPEED DOUBLE PRECISION)";
 
-	private final String pgGeometry_ColumnsCreationString = "CREATE TABLE "
-			+ geometry_columnsTableName
-			+ " "
-			+ " ( "
-			+ " f_table_catalog character varying(256) NOT NULL, "
-			+ " f_table_schema character varying(256) NOT NULL, "
-			+ " f_table_name character varying(256) NOT NULL, "
-			+ " f_geometry_column character varying(256) NOT NULL, "
-			+ " coord_dimension integer NOT NULL, "
-			+ " srid integer NOT NULL, "
-			+ " type character varying(30) NOT NULL, "
-			+ " CONSTRAINT geometry_columns_pk PRIMARY KEY (f_table_catalog, f_table_schema, f_table_name, f_geometry_column) "
-			+ " ) " + " WITH ( " + "   OIDS=TRUE " + " ); "
-			+ " ALTER TABLE geometry_columns " + "   OWNER TO postgres;";// TODO remove
-
-	private final String pgSpatial_Ref_SysCreationString = "CREATE TABLE "
-			+ spatial_ref_sysTableName + " " + " ( "
-			+ " srid integer NOT NULL, "
-			+ " auth_name character varying(256), " + " auth_srid integer, "
-			+ " srtext character varying(2048), "
-			+ " proj4text character varying(2048), "
-			+ " CONSTRAINT spatial_ref_sys_pkey PRIMARY KEY (srid) " + " ) "
-			+ " WITH ( " + "   OIDS=FALSE " + " );"
-			+ " ALTER TABLE geometry_columns " + "   OWNER TO postgres;";// TODO remove
-
 	public String pgNearestNeighborCreationString = "select h.id, h.speed, h.co2, h.numberofpoints, h.numberofcontributingtracks, h.lastcontributingtrack, ST_AsText(h.the_geom) as text_geom, ST_distance(w.the_geom,h.the_geom) as dist from aggregated_measurements h, "
 			+ "(select * from original_measurements where id='"
 			+ id_exp
@@ -101,7 +74,7 @@ public class PostgresPointService implements PointService {
 
 	public final String addGeometryColumnToAggregated_MeasurementsTableString = "SELECT AddGeometryColumn( '"
 			+ table_name_exp
-			+ "', 'the_geom', 4326, 'POINT', 2 );";
+			+ "', 'the_geom', " + spatial_ref_sys + ", 'POINT', 2 );";
 	
 	public final String selectAllMeasurementsofTrackQueryString = "select h.id, h.speed, h.co2, h.trackid, ST_AsText(h.the_geom) as text_geom from original_measurements h where h.trackid = ";
 	
@@ -149,9 +122,9 @@ public class PostgresPointService implements PointService {
 		
 		for (String trackID : trackIDs) {
 			
-			URL url;
+			URL url = null;
 			try {
-				url = new URL(Properties.requestTrackURL + trackID);
+				url = new URL(Properties.getRequestTrackURL() + trackID);
 				
 				InputStream in = url.openStream();
 
@@ -172,7 +145,7 @@ public class PostgresPointService implements PointService {
 				createPointsFromJSON(features, trackID, algorithm.getBbox());
 				
 			} catch (MalformedURLException e) {
-				e.printStackTrace();
+				LOGGER.error("Malformed URL: " + url == null ? null : url.toString(), e);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -355,16 +328,16 @@ public class PostgresPointService implements PointService {
 		
 		for (String propertyName : Properties.getPropertiesOfInterestDatatypeMapping().keySet()) {
 			
-			double weightedAvg = getWeightedAverage(source, closestPointInRange, propertyName);
+			double weightedAvg = getAverage(source, closestPointInRange, propertyName);
 			
-			LOGGER.debug("Weighted average: " + weightedAvg);
+			LOGGER.debug("Average: " + weightedAvg);
 			
 			source.setProperty(propertyName, weightedAvg);
 		}
 		
 	}
 	
-	private double getWeightedAverage(Point source, Point point,
+	private double getAverage(Point source, Point point,
 			String propertyName) {
 
 		Object sourceNumberObject = source.getProperty(propertyName);

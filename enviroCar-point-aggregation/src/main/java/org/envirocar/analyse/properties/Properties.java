@@ -20,11 +20,11 @@ public class Properties {
 	
 	private static Map<String, Class<?>> propertiesOfInterestDatatypeMapping;
 	
-	public static String baseURL;
+	private static String baseURL;
 	
-	public static String requestTrackURL;
+	private static String requestTrackURL;
 
-	public static String requestTracksWithinBboxURL;
+	private static String requestTracksWithinBboxURL;
 	
 	public static Object getProperty(String propertyName){
 		return getProperties().getProperty(propertyName);
@@ -34,7 +34,7 @@ public class Properties {
 		
 		if(properties == null){
 			
-			java.util.Properties properties = new java.util.Properties();
+			properties = new java.util.Properties();
 	        InputStream in = null;
 	        try {
 	            in = PostgresPointService.class.getResourceAsStream(PROPERTIES);
