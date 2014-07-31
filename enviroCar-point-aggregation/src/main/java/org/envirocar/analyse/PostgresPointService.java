@@ -271,9 +271,10 @@ public class PostgresPointService implements PointService {
 		
 		point.setNumberOfPointsUsedForAggregation(aggregationPoint.getNumberOfPointsUsedForAggregation()+1);
 		
+		LOGGER.debug(point.getLastContributingTrack() + " vs. " + aggregationPoint.getLastContributingTrack());
+		
 		if(!point.getLastContributingTrack().equals(aggregationPoint.getLastContributingTrack())){
-			point.setNumberOfTracksUsedForAggregation(point.getNumberOfTracksUsedForAggregation() +1);
-			point.setLastContributingTrack(aggregationPoint.getLastContributingTrack());
+			point.setNumberOfTracksUsedForAggregation(aggregationPoint.getNumberOfTracksUsedForAggregation() +1);
 		}
 		
 		return point;
@@ -281,7 +282,7 @@ public class PostgresPointService implements PointService {
 
 	@Override
 	public void addToResultSet(Point newPoint) {		
-		insertPoint(newPoint.getID(), newPoint.getX(), newPoint.getY(), newPoint.getLastContributingTrack(), newPoint.getNumberOfPointsUsedForAggregation(), newPoint.getPropertyMap(), true);
+		insertPoint(newPoint.getID(), newPoint.getX(), newPoint.getY(), newPoint.getLastContributingTrack(), newPoint.getNumberOfPointsUsedForAggregation(), newPoint.getNumberOfTracksUsedForAggregation(), newPoint.getPropertyMap(), true);
 	}
 	
 	private boolean removePoint(String pointID){
@@ -596,7 +597,7 @@ public class PostgresPointService implements PointService {
 	}
 
 	private boolean insertPoint(String id, double x, double y, String trackID,
-			int numberOfPoints, Map<String, Object> propertiesofInterestMap, boolean checkIfExists) {
+			int numberOfPoints, int numberOfTracks, Map<String, Object> propertiesofInterestMap, boolean checkIfExists) {
 
 		if(checkIfExists){
 			String statement = "select * from aggregated_measurements where id='" + id + "';";
@@ -614,19 +615,19 @@ public class PostgresPointService implements PointService {
 		}
 		
 		String statement = createInsertPointStatement(id, x, y, trackID,
-				numberOfPoints, propertiesofInterestMap);
+				numberOfPoints, numberOfTracks, propertiesofInterestMap);
 
 		return executeUpdateStatement(statement);
 	}
 
 	private String createInsertPointStatement(String id, double x, double y,
-			String trackID, int numberOfPoints,
+			String trackID, int numberOfPoints, int numberOfTracks,
 			Map<String, Object> propertiesofInterestMap) {
 
 		String columnNameString = "( id, the_geom, numberofpoints, numberofcontributingtracks, lastcontributingtrack, ";
 		String valueString = "( '" + id + "', ST_GeomFromText('POINT(" + x
 				+ " " + y + ")', " + spatial_ref_sys + "), " + numberOfPoints
-				+ ", " + 1 + ", '" + trackID + "', ";
+				+ ", " + numberOfTracks + ", '" + trackID + "', ";
 
 		Iterator<String> propertyNameIterator = Properties
 				.getPropertiesOfInterestDatatypeMapping().keySet().iterator();
