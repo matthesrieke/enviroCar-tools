@@ -67,7 +67,7 @@ public class CSVExport {
 
 	private static String createCSVHeader() {
 		
-		String result = "ID;lon;lat;NumberOfPointsUsed;NumberOfTracksUsed";
+		String result = "ID;lon;lat;NumberOfPointsUsed;NumberOfTracksUsed;";
 		
 		Iterator<String> propertyNameIterator = Properties.getPropertiesOfInterestDatatypeMapping().keySet().iterator();
 				

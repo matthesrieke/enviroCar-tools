@@ -152,4 +152,14 @@ public class InMemoryPoint implements Point {
 		this.lastContributingTrack = lastContributingTrack;
 	}
 
+	@Override
+	public void setX(double x) {
+		this.x = x;		
+	}
+
+	@Override
+	public void setY(double y) {
+		this.y = y;
+	}
+
 }

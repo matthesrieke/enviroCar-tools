@@ -22,15 +22,24 @@
  */
 package org.envirocar.analyse;
 
+import java.io.File;
+import java.io.IOException;
+
+import org.envirocar.analyse.export.csv.CSVExport;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AggregationAlgorithmPostgresTest {
 
+	private static final Logger LOGGER = LoggerFactory
+			.getLogger(AggregationAlgorithmPostgresTest.class);
+	
 	@Test
 	public void testAlgorithm(){
 		
 		double maxx = 7.6339;
-		double maxy = 51.95;
+		double maxy = 51.96;
 		double minx = 7.6224;
 		double miny = 51.94799;
 		
@@ -39,7 +48,17 @@ public class AggregationAlgorithmPostgresTest {
 //		double minx = 7.6224;
 //		double miny = 51.94799;
 		        
-        new AggregationAlgorithm(minx, miny, maxx, maxy, 0.00045).runAlgorithm();
+//        AggregationAlgorithm algorithm = new AggregationAlgorithm(minx, miny, maxx, maxy, 0.00045);
+        AggregationAlgorithm algorithm = new AggregationAlgorithm(0.00045);
+		
+        algorithm.runAlgorithm("53b5228ee4b01607fa566b78");
+        algorithm.runAlgorithm("53b52282e4b01607fa566469");
+        
+		try {
+			CSVExport.exportAsCSV(algorithm.getResultSet(), File.createTempFile("aggregation", ".csv").getAbsolutePath());
+		} catch (IOException e) {
+			LOGGER.error("Could not export resultSet as CSV:", e);
+		}
 		
 	}
 }

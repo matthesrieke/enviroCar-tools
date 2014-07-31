@@ -58,4 +58,8 @@ public interface Point {
 
 	void setLastContributingTrack(String lastContributingTrack);
 	
+	void setX(double x);
+	
+	void setY(double y);
+	
 }

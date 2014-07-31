@@ -22,7 +22,6 @@
  */
 package org.envirocar.analyse;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -33,7 +32,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.envirocar.analyse.entities.Point;
-import org.envirocar.analyse.export.csv.CSVExport;
 import org.envirocar.analyse.properties.Properties;
 import org.envirocar.analyse.util.Utils;
 import org.slf4j.Logger;
@@ -58,8 +56,9 @@ public class AggregationAlgorithm {
 	private PointService pointService;
 	private double maxx, maxy, minx, miny;
 	
-	public AggregationAlgorithm(){
+	public AggregationAlgorithm(double distance){
 		pointService = new PostgresPointService(this);
+		this.distance = distance;
 	}
 	
 	public AggregationAlgorithm(double minx, double miny, double maxx, double maxy, double distance){
@@ -69,28 +68,10 @@ public class AggregationAlgorithm {
 		this.minx = minx;
 		this.miny = miny;
 		
-		/*
-		 * TODO remove this
-		 */
-		
-		double maxx2 = 7.6539;
-		double maxy2 = 51.96519;
-		double minx2 = 7.6224;
-		double miny2 = 51.94799;
-		
-		/*
-		 * TODO remove
-		 */
-		
-		Coordinate upperRight = new Coordinate(maxx2, maxy2);
-        Coordinate upperLeft = new Coordinate(minx2, maxy2);
-        Coordinate lowerRight = new Coordinate(maxx2, miny2);
-        Coordinate lowerLeft = new Coordinate(minx2, miny2);
-		
-//        Coordinate upperRight = new Coordinate(maxx, maxy);
-//        Coordinate upperLeft = new Coordinate(minx, maxy);
-//        Coordinate lowerRight = new Coordinate(maxx, miny);
-//        Coordinate lowerLeft = new Coordinate(minx, miny);
+        Coordinate upperRight = new Coordinate(maxx, maxy);
+        Coordinate upperLeft = new Coordinate(minx, maxy);
+        Coordinate lowerRight = new Coordinate(maxx, miny);
+        Coordinate lowerLeft = new Coordinate(minx, miny);
         
         Coordinate[] coordinates = new Coordinate[] {
                 lowerLeft,
@@ -105,23 +86,86 @@ public class AggregationAlgorithm {
 		pointService = new PostgresPointService(this);
 	}
 	
+	public void runAlgorithm(String trackID){
+		
+		LOGGER.debug("");
+		LOGGER.debug("");
+		LOGGER.debug("");
+		LOGGER.debug("");
+		
+		LOGGER.debug("Track: " + trackID);
+		LOGGER.debug("ResultSet size: " + pointService.getResultSet().size());
+		
+		LOGGER.debug("");
+		LOGGER.debug("");
+		LOGGER.debug("");
+		LOGGER.debug("");
+		
+		
+		/*
+		 * PointService get measurements for track 
+		 */
+		
+		pointService.getMeasurementsOfTrack(trackID);
+		
+		/*
+		 * Pointservice get next measurement
+		 */
+
+		Point nextPoint = pointService.getNextPoint(trackID);
+
+		while (nextPoint != null) {
+
+			/*
+			 * get nearest neighbor from resultSet
+			 */
+
+			Point nearestNeighbor = pointService.getNearestNeighbor(
+					nextPoint.getID(), distance);
+
+			if (nearestNeighbor != null) {
+
+				/*
+				 * if there is one
+				 * 
+				 * aggregate values (avg, function should be
+				 * replaceable)
+				 */
+				pointService.aggregate(nextPoint, nearestNeighbor);
+				/*
+				 * PointService replace point in resultSet with aggregated
+				 * point
+				 */
+				pointService.updateResultSet(nearestNeighbor.getID(),
+						nextPoint);
+
+			} else {
+				/*
+				 * if there is no nearest neighbor
+				 * 
+				 * add point to resultSet
+				 */					
+				LOGGER.info("No nearest neighbor found for " + nextPoint.getID() + ". Adding to resultSet.");
+				
+				pointService.addToResultSet(nextPoint);
+			}
+
+			/*
+			 * continue with next point in track
+			 */
+			nextPoint = pointService.getNextPoint(trackID);
+		}
+		
+	}
+	
 	public void runAlgorithm(){
 		
 		/*
 		 * get tracks
-		 * 
-		 * pass trackIDs to PointService
-		 * 
-		 * PointService get Measurements for tracks
-		 * 
-		 * 
 		 */
 				
         List<String> trackIDs = getTracks(bbox);
 		
-        pointService.getMeasurementsOfTracks(trackIDs);
-        
-        
 		/*
 		 * foreach track
 		 * 
@@ -129,62 +173,10 @@ public class AggregationAlgorithm {
         
 		for (String trackID : trackIDs) {
 
-			/*
-			 * Pointservice get next measurement
-			 */
-
-			Point nextPoint = pointService.getNextPoint(trackID);
-
-			while (nextPoint != null) {
-
-				/*
-				 * get nearest neighbor from resultSet
-				 */
-
-				Point nearestNeighbor = pointService.getNearestNeighbor(
-						nextPoint.getID(), distance);
-
-				if (nearestNeighbor != null) {
-
-					/*
-					 * if there is one
-					 * 
-					 * aggregate values (weighted avg, function should be
-					 * replaceable)
-					 */
-					pointService.aggregate(nextPoint, nearestNeighbor);
-					/*
-					 * PointService replace point in resultSet with aggregated
-					 * point
-					 */
-					pointService.updateResultSet(nearestNeighbor.getID(),
-							nextPoint);
-
-				} else {
-					/*
-					 * if there is no nearest neighbor
-					 * 
-					 * add point to resultSet
-					 */					
-					LOGGER.info("No nearest neighbor found for " + nextPoint.getID() + ". Adding to resultSet.");
-					
-					pointService.addToResultSet(nextPoint);
-				}
-
-				/*
-				 * continue with next point in track
-				 */
-				nextPoint = pointService.getNextPoint(trackID);
-			}
+			runAlgorithm(trackID);
 			/* 
 			 * continue with next track
 			 */
-		}
-		
-		try {
-			CSVExport.exportAsCSV(pointService.getResultSet(), File.createTempFile("aggregation", ".csv").getAbsolutePath());
-		} catch (IOException e) {
-			LOGGER.error("Could not export resultSet as CSV:", e);
 		}
 	}
 	
@@ -196,6 +188,8 @@ public class AggregationAlgorithm {
 		try {		
 			url = new URL(Properties.getRequestTracksWithinBboxURL() + minx + "," + miny + "," + maxx + "," + maxy);
 			
+			LOGGER.debug("URL for fetching tracks: " + url.toString());
+			
 			InputStream in = url.openStream();
 
 			ObjectMapper objMapper = new ObjectMapper();
@@ -206,20 +200,13 @@ public class AggregationAlgorithm {
 
 			LOGGER.info("Number of tracks: " + tracks.size());
 			
-//			int count = 0;//TODO remove
-			
 			for (Object object : tracks) {
-				
-//				if(count > 3){
-//					break;//TODO remove
-//				}
 				
 				if(object instanceof LinkedHashMap<?, ?>){
 					String id = String.valueOf(((LinkedHashMap<?, ?>)object).get("id"));
 					
 					result.add(id);
 				}
-//				count++;//TODO remove
 			}
 			
 		} catch (MalformedURLException e) {
@@ -247,4 +234,9 @@ public class AggregationAlgorithm {
 	public void setDistance(double distance) {
 		this.distance = distance;
 	}
+	
+	public List<Point> getResultSet(){
+		return pointService.getResultSet();
+	}
+	
 }

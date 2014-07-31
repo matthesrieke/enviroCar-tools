@@ -176,6 +176,39 @@ public class PostgresPointService implements PointService {
 	}
 
 	@Override
+	public void getMeasurementsOfTrack(String trackID) {
+		
+		URL url = null;
+		try {
+			url = new URL(Properties.getRequestTrackURL() + trackID);
+			
+			InputStream in = url.openStream();
+
+			ObjectMapper objMapper = new ObjectMapper();
+
+			Map<?, ?> map = objMapper.readValue(in, Map.class);
+
+			ArrayList<?> features = null;
+
+			for (Object o : map.keySet()) {
+				Object entry = map.get(o);
+
+				if (o.equals("features")) {
+					features = (ArrayList<?>) entry;
+				}
+			}
+			
+			createPointsFromJSON(features, trackID, algorithm.getBbox());
+			
+		} catch (MalformedURLException e) {
+			LOGGER.error("Malformed URL: " + url == null ? null : url.toString(), e);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
+	}
+
+	@Override
 	public Point getNearestNeighbor(String pointID, double distance) {
 
 		String queryString = pgNearestNeighborCreationString.replace(id_exp,
@@ -291,6 +324,9 @@ public class PostgresPointService implements PointService {
 		
 		point.setID(new ObjectId().toString());
 		
+		point.setX(aggregationPoint.getX());
+		point.setY(aggregationPoint.getY());
+				
 		point.setNumberOfPointsUsedForAggregation(aggregationPoint.getNumberOfPointsUsedForAggregation()+1);
 		
 		LOGGER.debug(point.getLastContributingTrack() + " vs. " + aggregationPoint.getLastContributingTrack());
@@ -298,6 +334,9 @@ public class PostgresPointService implements PointService {
 		if(!point.getLastContributingTrack().equals(aggregationPoint.getLastContributingTrack())){
 			point.setNumberOfTracksUsedForAggregation(aggregationPoint.getNumberOfTracksUsedForAggregation() +1);
 		}
+		
+		LOGGER.debug("Aggregated: " + point.getID() + " and " + aggregationPoint.getID());
+		LOGGER.debug("NumberOfPoints " + point.getNumberOfPointsUsedForAggregation());
 		
 		return point;
 	}
@@ -479,10 +518,12 @@ public class PostgresPointService implements PointService {
 				
 				Coordinate pointCoordinate = new Coordinate(coordinatesXY[0], coordinatesXY[1]);
 				
-				if(!bbox.contains(Utils.geometryFactory.createPoint(pointCoordinate))){
-					continue;
+				if (bbox != null) {
+					if (!bbox.contains(Utils.geometryFactory
+							.createPoint(pointCoordinate))) {
+						continue;
+					}
 				}
-				
 				Object propertiesObject = featureMap.get("properties");				
 				
 				if (propertiesObject instanceof LinkedHashMap<?, ?>) {
