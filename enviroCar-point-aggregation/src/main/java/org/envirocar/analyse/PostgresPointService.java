@@ -333,6 +333,8 @@ public class PostgresPointService implements PointService {
 		
 		if(!point.getLastContributingTrack().equals(aggregationPoint.getLastContributingTrack())){
 			point.setNumberOfTracksUsedForAggregation(aggregationPoint.getNumberOfTracksUsedForAggregation() +1);
+		}else{
+			point.setNumberOfTracksUsedForAggregation(aggregationPoint.getNumberOfTracksUsedForAggregation());
 		}
 		
 		LOGGER.debug("Aggregated: " + point.getID() + " and " + aggregationPoint.getID());
