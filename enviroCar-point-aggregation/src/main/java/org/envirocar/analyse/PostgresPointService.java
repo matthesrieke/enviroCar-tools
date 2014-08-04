@@ -103,7 +103,7 @@ public class PostgresPointService implements PointService {
 			+ "TRACKID VARCHAR(24)," + "CO2 DOUBLE PRECISION,"
 			+ "SPEED DOUBLE PRECISION)";
 
-	public String pgNearestNeighborCreationString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(w.the_geom,h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h, "
+	public String pgNearestNeighborCreationString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(w.the_geom,h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h, "
 			+ "(select * from " + original_MeasurementsTableName + " where " + idField + "='"
 			+ id_exp
 			+ "') w "
@@ -116,7 +116,7 @@ public class PostgresPointService implements PointService {
 	
 	public final String selectAllMeasurementsofTrackQueryString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + trackIDField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + " from " + original_MeasurementsTableName + " h where h." + trackIDField + " = ";
 	
-	public final String selectAllAggregatedMeasurementsString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + " from " + aggregated_MeasurementsTableName + " h; ";
+	public final String selectAllAggregatedMeasurementsString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + " from " + aggregated_MeasurementsTableName + " h; ";
 	
 	public final String deletePointFromAggregatedMeasurementsString = "delete from " + aggregated_MeasurementsTableName + " where " + idField + "=";
 	
@@ -241,6 +241,8 @@ public class PostgresPointService implements PointService {
 					String resultID = resultSet.getString(idField);
 
 					Map<String, Object> propertyMap = new HashMap<>();
+					
+					Map<String, Integer> propertyPointsUsedForAggregationMap = new HashMap<>();
 
 					for (String propertyName : Properties
 							.getPropertiesOfInterestDatatypeMapping().keySet()) {
@@ -257,6 +259,12 @@ public class PostgresPointService implements PointService {
 						}
 
 						propertyMap.put(propertyName, value);
+						
+						int pointsUsedForAggregation = resultSet.getInt(propertyName
+									.toLowerCase() + "numberofcontributingpoints");
+								
+						propertyPointsUsedForAggregationMap.put(propertyName, pointsUsedForAggregation);
+						
 					}
 
 					String resultLastContributingTrack = resultSet
@@ -283,7 +291,7 @@ public class PostgresPointService implements PointService {
 							resultXY[0], resultXY[1], propertyMap,
 							resultNumberOfContributingPoints,
 							resultNumberOfContributingTracks,
-							resultLastContributingTrack);
+							resultLastContributingTrack, propertyPointsUsedForAggregationMap);
 
 					return resultPoint;
 				}
@@ -364,7 +372,8 @@ public class PostgresPointService implements PointService {
 
 	@Override
 	public void addToResultSet(Point newPoint) {		
-		insertPoint(newPoint.getID(), newPoint.getX(), newPoint.getY(), newPoint.getLastContributingTrack(), newPoint.getNumberOfPointsUsedForAggregation(), newPoint.getNumberOfTracksUsedForAggregation(), newPoint.getPropertyMap(), true);
+//		insertPoint(newPoint.getID(), newPoint.getX(), newPoint.getY(), newPoint.getLastContributingTrack(), newPoint.getNumberOfPointsUsedForAggregation(), newPoint.getNumberOfTracksUsedForAggregation(), newPoint.getPropertyMap(), true);
+		insertPoint(newPoint, true);
 	}
 	
 	private boolean removePoint(String pointID){
@@ -420,24 +429,40 @@ public class PostgresPointService implements PointService {
 		
 	}
 	
-	private double getAverage(Point source, Point point,
+	private double getAverage(Point source, Point closestPointInRange,
 			String propertyName) {
 
 		Object sourceNumberObject = source.getProperty(propertyName);
 
+		/*
+		 * TODO what if the source number is null or 0.0?
+		 */
 		if (sourceNumberObject instanceof Number) {
 
 			Number sourceValue = (Number) sourceNumberObject;
 
 			double summedUpValues = sourceValue.doubleValue();
 
-			Object pointNumberObject = point.getProperty(propertyName);
+			Object pointNumberObject = closestPointInRange.getProperty(propertyName);
 			if (pointNumberObject instanceof Number) {
+				
+				double d = ((Number) pointNumberObject).doubleValue();
+				
+				/*
+				 * sort out values of 0.0
+				 */
+				if(d == 0.0){
+					LOGGER.debug("Value for aggregation is 0.0, will not use this.");
+					source.setNumberOfPointsUsedForAggregation(closestPointInRange.getNumberOfPointsUsedForAggregation(propertyName), propertyName);
+					return summedUpValues;
+				}
+				source.setNumberOfPointsUsedForAggregation(closestPointInRange.getNumberOfPointsUsedForAggregation(propertyName) + 1, propertyName);
+				
 				summedUpValues = summedUpValues
-						+ ((Number) pointNumberObject).doubleValue();
+						+ d;
+				
+				return summedUpValues / 2;
 			}
-
-			return summedUpValues / 2;
 		}
 
 		LOGGER.debug("source property not a number");
@@ -448,20 +473,38 @@ public class PostgresPointService implements PointService {
 	private Point createPointFromCurrentResultSetEntry(ResultSet resultSet) throws SQLException{
 		
 		String resultID = resultSet.getString(idField);
-		
+
 		Map<String, Object> propertyMap = new HashMap<>();
 		
-		for (String propertyName : Properties.getPropertiesOfInterestDatatypeMapping().keySet()) {
-			
-			Class<?> propertyClass = Properties.getPropertiesOfInterestDatatypeMapping().get(propertyName);
-			
+		Map<String, Integer> propertyPointsUsedForAggregationMap = new HashMap<>();
+
+		for (String propertyName : Properties
+				.getPropertiesOfInterestDatatypeMapping().keySet()) {
+
+			Class<?> propertyClass = Properties
+					.getPropertiesOfInterestDatatypeMapping().get(
+							propertyName);
+
 			Object value = null;
+
+			if (propertyClass.equals(Double.class)) {
+				value = resultSet.getDouble(propertyName
+						.toLowerCase());
+			}
+
+			propertyMap.put(propertyName, value);
 			
-			if(propertyClass.equals(Double.class)){
-				value = resultSet.getDouble(propertyName.toLowerCase());
+			try{
+			
+			int pointsUsedForAggregation = resultSet.getInt(propertyName
+						.toLowerCase() + "numberofcontributingpoints");
+					
+			propertyPointsUsedForAggregationMap.put(propertyName, pointsUsedForAggregation);
+			}catch(Exception e){
+				LOGGER.info("Column " + propertyName.toLowerCase() + "numberofcontributingpoints" + " not available.");
+				LOGGER.info(e.getMessage());
 			}
 			
-			propertyMap.put(propertyName, value);
 		}
 		
 		String resultLastContributingTrack = "";
@@ -516,7 +559,7 @@ public class PostgresPointService implements PointService {
 			LOGGER.error(e.getMessage());
 		}
 		
-		Point resultPoint = new InMemoryPoint(resultID, resultXY[0], resultXY[1], propertyMap, resultNumberOfContributingPoints, resultNumberOfContributingTracks, resultLastContributingTrack);
+		Point resultPoint = new InMemoryPoint(resultID, resultXY[0], resultXY[1], propertyMap, resultNumberOfContributingPoints, resultNumberOfContributingTracks, resultLastContributingTrack, propertyPointsUsedForAggregationMap);
 		
 		return resultPoint;
 		
@@ -739,6 +782,77 @@ public class PostgresPointService implements PointService {
 		return statement;
 	}
 
+	private boolean insertPoint(Point point,  boolean checkIfExists) {
+
+		if(checkIfExists){
+			String statement = "select * from " + aggregated_MeasurementsTableName + " where "+ idField +"='" + point.getID() + "';";
+			
+			ResultSet rs = executeQueryStatement(statement);
+			
+			try {
+				if(rs.next()){
+					return false;
+				}
+			} catch (SQLException e) {
+				LOGGER.error("Could not check if row with id=" + point.getID() + " and "+ trackIDField +"=" + point.getLastContributingTrack() + " exists.", e);
+				return false;
+			}
+		}
+		
+		String statement = createInsertPointStatement(point);
+
+		return executeUpdateStatement(statement);
+	}
+	
+	private String createInsertPointStatement(Point point) {
+
+		String columnNameString = "( "+ idField +", "+ geometryEncodedField +", "+ generalNumberOfContributingPointsField +", "+ generalnumberOfContributingTracksField +", "+ lastContributingTrackField +", ";
+		String valueString = "( '" + point.getID() + "', ST_GeomFromText('POINT(" + point.getX()
+				+ " " + point.getY() + ")', " + spatial_ref_sys + "), " + point.getNumberOfPointsUsedForAggregation()
+				+ ", " + point.getNumberOfTracksUsedForAggregation() + ", '" + point.getLastContributingTrack() + "', ";
+
+		Iterator<String> propertyNameIterator = Properties
+				.getPropertiesOfInterestDatatypeMapping().keySet().iterator();
+
+		while (propertyNameIterator.hasNext()) {
+			String propertyName = (String) propertyNameIterator.next();
+
+			columnNameString = columnNameString.concat(propertyName
+					.toLowerCase());
+			
+			columnNameString = columnNameString.concat(", ");
+			
+			columnNameString = columnNameString.concat(propertyName
+					.toLowerCase() + "numberofcontributingpoints");
+			
+			Object o = point.getProperty(propertyName);
+			
+			valueString = valueString.concat(o == null? "" : String
+					.valueOf(o));
+			
+			valueString = valueString.concat(", ");
+			
+			o = point.getNumberOfPointsUsedForAggregation(propertyName);
+			
+			valueString = valueString.concat(String
+					.valueOf(o == null? 0 : String
+							.valueOf(o)));
+
+			if (propertyNameIterator.hasNext()) {
+				columnNameString = columnNameString.concat(", ");
+				valueString = valueString.concat(", ");
+			} else {
+				columnNameString = columnNameString.concat(")");
+				valueString = valueString.concat(")");
+			}
+		}
+
+		String statement = "INSERT INTO " + aggregated_MeasurementsTableName
+				+ columnNameString + "VALUES" + valueString + ";";
+
+		return statement;
+	}
+	
 	private boolean insertPoint(String id, double x, double y, String trackID, Map<String, Object> propertiesofInterestMap, boolean checkIfExists) {
 
 		if(checkIfExists){

@@ -39,6 +39,8 @@ public interface Point {
 	
 	int getNumberOfPointsUsedForAggregation();
 	
+	int getNumberOfPointsUsedForAggregation(String propertyName);
+	
 	List<String> getTracksUsedForAggregation();
 	
 	void setID(String id);
@@ -46,6 +48,8 @@ public interface Point {
 	void setProperty(String propertyName, Object value);
 	
 	void setNumberOfPointsUsedForAggregation(int numberOfPoints);
+	
+	void setNumberOfPointsUsedForAggregation(int numberOfPoints, String propertyName);
 	
 	void addTrackUsedForAggregation(String trackID);
 

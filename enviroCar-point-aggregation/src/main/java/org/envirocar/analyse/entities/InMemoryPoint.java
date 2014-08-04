@@ -23,6 +23,7 @@
 package org.envirocar.analyse.entities;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +34,7 @@ public class InMemoryPoint implements Point {
 	private double x;
 	private double y;
 	private Map<String, Object> propertyMap;
+	private Map<String, Integer> propertyPointsUsedForAggregationMap;
 	private int numberOfPointsUsedForAggregation = 1;
 	private List<String> tracksUsedForAggregation;
 	private int numberOfTracksUsedForAggregation;
@@ -44,6 +46,7 @@ public class InMemoryPoint implements Point {
 		this.y = y;	
 		this.propertyMap = propertyMap;
 		tracksUsedForAggregation = new ArrayList<>();
+		propertyPointsUsedForAggregationMap = new HashMap<>();
 		tracksUsedForAggregation.add(trackID);
 	}
 	
@@ -53,6 +56,7 @@ public class InMemoryPoint implements Point {
 		this.y = y;	
 		this.propertyMap = propertyMap;		
 		this.numberOfPointsUsedForAggregation = numberOfPointsUsedForAggregation;		
+		propertyPointsUsedForAggregationMap = new HashMap<>();
 		tracksUsedForAggregation = new ArrayList<>();
 		
 		for (Object object : contributingTracks) {
@@ -62,7 +66,7 @@ public class InMemoryPoint implements Point {
 		}
 	}
 	
-	public InMemoryPoint(String id, double x, double y, Map<String, Object> propertyMap, int numberOfPointsUsedForAggregation, int numberOfTracksUsedForAggregation, String lastContributingTrack){
+	public InMemoryPoint(String id, double x, double y, Map<String, Object> propertyMap, int numberOfPointsUsedForAggregation, int numberOfTracksUsedForAggregation, String lastContributingTrack, Map<String, Integer> propertyPointsUsedForAggregationMap){
 		this.id = id;
 		this.x = x;
 		this.y = y;	
@@ -70,6 +74,7 @@ public class InMemoryPoint implements Point {
 		this.numberOfPointsUsedForAggregation = numberOfPointsUsedForAggregation;	
 		this.numberOfTracksUsedForAggregation = numberOfTracksUsedForAggregation;	
 		this.lastContributingTrack = lastContributingTrack;	
+		this.propertyPointsUsedForAggregationMap = propertyPointsUsedForAggregationMap;
 	}
 	
 	public InMemoryPoint(){
@@ -160,6 +165,21 @@ public class InMemoryPoint implements Point {
 	@Override
 	public void setY(double y) {
 		this.y = y;
+	}
+
+	@Override
+	public int getNumberOfPointsUsedForAggregation(String propertyName) {
+
+		if (propertyPointsUsedForAggregationMap.containsKey(propertyName)) {
+			return propertyPointsUsedForAggregationMap.get(propertyName);
+		}
+		return 0;
+	}
+
+	@Override
+	public void setNumberOfPointsUsedForAggregation(int numberOfPoints,
+			String propertyName) {
+		propertyPointsUsedForAggregationMap.put(propertyName, numberOfPoints);		
 	}
 
 }
