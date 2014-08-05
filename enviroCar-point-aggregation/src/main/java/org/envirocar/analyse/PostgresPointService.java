@@ -353,6 +353,9 @@ public class PostgresPointService implements PointService {
 //		double averagedX = (aggregatedPoint.getX() + nearestNeighborPoint.getX()) / 2;
 //		double averagedY = (aggregatedPoint.getY() + nearestNeighborPoint.getY()) / 2;
 		
+		/*
+		 * distance weighting
+		 */
 		double averagedX = ((nearestNeighborPoint.getX() * nearestNeighborPoint.getNumberOfPointsUsedForAggregation()) + aggregatedPoint.getX()) / (nearestNeighborPoint.getNumberOfPointsUsedForAggregation() + 1);
 		double averagedY = ((nearestNeighborPoint.getY() * nearestNeighborPoint.getNumberOfPointsUsedForAggregation()) + aggregatedPoint.getY()) / (nearestNeighborPoint.getNumberOfPointsUsedForAggregation() + 1);
 				
@@ -460,7 +463,7 @@ public class PostgresPointService implements PointService {
 		
 		for (String propertyName : Properties.getPropertiesOfInterestDatatypeMapping().keySet()) {
 			
-			double weightedAvg = getAverage(source, closestPointInRange, propertyName);
+			double weightedAvg = getWeightedAverage(source, closestPointInRange, propertyName);
 			
 			LOGGER.debug("Average: " + weightedAvg);
 			
@@ -469,14 +472,11 @@ public class PostgresPointService implements PointService {
 		
 	}
 	
-	private double getAverage(Point source, Point closestPointInRange,
+	private double getWeightedAverage(Point source, Point closestPointInRange,
 			String propertyName) {
 
 		Object sourceNumberObject = source.getProperty(propertyName);
 
-		/*
-		 * TODO what if the source number is null or 0.0?
-		 */
 		if (sourceNumberObject instanceof Number) {
 
 			Number sourceValue = (Number) sourceNumberObject;
@@ -490,22 +490,28 @@ public class PostgresPointService implements PointService {
 				
 				double d = ((Number) pointNumberObject).doubleValue();
 				
+				int numberOfPointsUsedForAggregation = closestPointInRange.getNumberOfPointsUsedForAggregation(propertyName);
+				
 				/*
 				 * sort out values of 0.0
 				 */
 				if(d == 0.0){
 					LOGGER.debug("Value for aggregation is 0.0, will not use this.");
-					source.setNumberOfPointsUsedForAggregation(closestPointInRange.getNumberOfPointsUsedForAggregation(propertyName), propertyName);
+					source.setNumberOfPointsUsedForAggregation(numberOfPointsUsedForAggregation, propertyName);
 					return summedUpValues;
 				}
-				source.setNumberOfPointsUsedForAggregation(closestPointInRange.getNumberOfPointsUsedForAggregation(propertyName) + 1, propertyName);
+				
+				double weightedAvg = ((d * numberOfPointsUsedForAggregation) + summedUpValues) / (numberOfPointsUsedForAggregation + 1);
+				
+				source.setNumberOfPointsUsedForAggregation(numberOfPointsUsedForAggregation + 1, propertyName);
 				
 				LOGGER.debug("Value of " + propertyName + " of point " + closestPointInRange.getID() + " = " + d);
 				
-				summedUpValues = summedUpValues
-						+ d;
-				
-				return summedUpValues / 2;
+//				summedUpValues = summedUpValues
+//						+ d;
+//				
+//				return summedUpValues / 2;
+				return weightedAvg;
 			}
 		}
 
