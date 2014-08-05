@@ -281,11 +281,11 @@ public class PostgresPointService implements PointService {
 					double[] resultXY = Utils
 							.convertWKTPointToXY(resultGeomAsText);
 
-					LOGGER.debug(resultID);// TODO remove
-					LOGGER.debug("" + resultSet.getDouble(distField));// TODO
-																	// remove
-					LOGGER.debug(resultSet.getString(geometryPlainTextField));// TODO
-																	// remove
+//					LOGGER.debug(resultID);// TODO remove
+//					LOGGER.debug("" + resultSet.getDouble(distField));// TODO
+//																	// remove
+//					LOGGER.debug(resultSet.getString(geometryPlainTextField));// TODO
+//																	// remove
 
 					Point resultPoint = new InMemoryPoint(resultID,
 							resultXY[0], resultXY[1], propertyMap,
@@ -342,38 +342,78 @@ public class PostgresPointService implements PointService {
 	}
 
 	@Override
-	public Point aggregate(Point point, Point aggregationPoint) {
+	public Point aggregate(Point point, Point nearestNeighborPoint) {
 		
-		updateValues(point, aggregationPoint);
+		Point aggregatedPoint = new InMemoryPoint(point);
 		
-		point.setID(new ObjectId().toString());
+		updateValues(aggregatedPoint, nearestNeighborPoint);
 		
-		double averagedX = (point.getX() + aggregationPoint.getX()) / 2;		
-		double averagedY = (point.getY() + aggregationPoint.getY()) / 2;		
+		aggregatedPoint.setID(new ObjectId().toString());
 		
-		point.setX(averagedX);
-		point.setY(averagedY);
+//		double averagedX = (aggregatedPoint.getX() + nearestNeighborPoint.getX()) / 2;
+//		double averagedY = (aggregatedPoint.getY() + nearestNeighborPoint.getY()) / 2;
+		
+		double averagedX = ((nearestNeighborPoint.getX() * nearestNeighborPoint.getNumberOfPointsUsedForAggregation()) + aggregatedPoint.getX()) / (nearestNeighborPoint.getNumberOfPointsUsedForAggregation() + 1);
+		double averagedY = ((nearestNeighborPoint.getY() * nearestNeighborPoint.getNumberOfPointsUsedForAggregation()) + aggregatedPoint.getY()) / (nearestNeighborPoint.getNumberOfPointsUsedForAggregation() + 1);
 				
-		point.setNumberOfPointsUsedForAggregation(aggregationPoint.getNumberOfPointsUsedForAggregation()+1);
+		aggregatedPoint.setNumberOfPointsUsedForAggregation(nearestNeighborPoint.getNumberOfPointsUsedForAggregation()+1);
 		
-		LOGGER.debug(point.getLastContributingTrack() + " vs. " + aggregationPoint.getLastContributingTrack());
+		aggregatedPoint.setX(averagedX);
+		aggregatedPoint.setY(averagedY);
 		
-		if(!point.getLastContributingTrack().equals(aggregationPoint.getLastContributingTrack())){
-			point.setNumberOfTracksUsedForAggregation(aggregationPoint.getNumberOfTracksUsedForAggregation() +1);
+		LOGGER.debug(aggregatedPoint.getLastContributingTrack() + " vs. " + nearestNeighborPoint.getLastContributingTrack());
+		
+		if(!aggregatedPoint.getLastContributingTrack().equals(nearestNeighborPoint.getLastContributingTrack())){
+			aggregatedPoint.setNumberOfTracksUsedForAggregation(nearestNeighborPoint.getNumberOfTracksUsedForAggregation() +1);
 		}else{
-			point.setNumberOfTracksUsedForAggregation(aggregationPoint.getNumberOfTracksUsedForAggregation());
+			aggregatedPoint.setNumberOfTracksUsedForAggregation(nearestNeighborPoint.getNumberOfTracksUsedForAggregation());
 		}
 		
-		LOGGER.debug("Aggregated: " + point.getID() + " and " + aggregationPoint.getID());
-		LOGGER.debug("NumberOfPoints " + point.getNumberOfPointsUsedForAggregation());
+		LOGGER.debug("Aggregated: " + aggregatedPoint.getID() + " and " + nearestNeighborPoint.getID());
+		LOGGER.debug("NumberOfPoints " + aggregatedPoint.getNumberOfPointsUsedForAggregation());
 		
-		return point;
+		return aggregatedPoint;
+	}
+
+	@Override
+	public boolean isFitForAggregation(Point point) {
+
+		boolean result = false;
+		
+		for (String propertyName : Properties.getPropertiesOfInterestDatatypeMapping().keySet()) {
+			
+			Object numberObject = point.getProperty(propertyName);
+			
+			if(numberObject instanceof Number){
+				result = result || !isNumberObjectNullOrZero((Number) numberObject);
+			}else{
+				/*
+				 * not a number, we cannot aggregate this currently
+				 */
+				result = result || false;
+			}
+		}
+		
+		return result;
 	}
 
 	@Override
 	public void addToResultSet(Point newPoint) {		
 //		insertPoint(newPoint.getID(), newPoint.getX(), newPoint.getY(), newPoint.getLastContributingTrack(), newPoint.getNumberOfPointsUsedForAggregation(), newPoint.getNumberOfTracksUsedForAggregation(), newPoint.getPropertyMap(), true);
 		insertPoint(newPoint, true);
+	}
+	
+	private boolean isNumberObjectNullOrZero(Number numberObject) {
+
+		Number sourceValue = (Number) numberObject;
+
+		double value = sourceValue.doubleValue();
+
+		if (value == 0.0) {
+			return true;
+		}
+
+		return false;
 	}
 	
 	private boolean removePoint(String pointID){
@@ -443,6 +483,8 @@ public class PostgresPointService implements PointService {
 
 			double summedUpValues = sourceValue.doubleValue();
 
+			LOGGER.debug("Value of " + propertyName + " of point " + source.getID() + " = " + summedUpValues);
+			
 			Object pointNumberObject = closestPointInRange.getProperty(propertyName);
 			if (pointNumberObject instanceof Number) {
 				
@@ -458,6 +500,8 @@ public class PostgresPointService implements PointService {
 				}
 				source.setNumberOfPointsUsedForAggregation(closestPointInRange.getNumberOfPointsUsedForAggregation(propertyName) + 1, propertyName);
 				
+				LOGGER.debug("Value of " + propertyName + " of point " + closestPointInRange.getID() + " = " + d);
+				
 				summedUpValues = summedUpValues
 						+ d;
 				
@@ -465,7 +509,7 @@ public class PostgresPointService implements PointService {
 			}
 		}
 
-		LOGGER.debug("source property not a number");
+		LOGGER.debug("Source property " + propertyName + " is not a number.");
 		
 		return -1;
 	}

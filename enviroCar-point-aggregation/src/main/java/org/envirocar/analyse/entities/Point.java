@@ -35,6 +35,8 @@ public interface Point {
 	
 	Map<String, Object> getPropertyMap();
 	
+	Map<String, Integer> getPropertyPointsUsedForAggregationMap();
+	
 	Object getProperty(String propertyName);
 	
 	int getNumberOfPointsUsedForAggregation();

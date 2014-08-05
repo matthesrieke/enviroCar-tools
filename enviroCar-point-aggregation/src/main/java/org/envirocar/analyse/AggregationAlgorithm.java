@@ -99,8 +99,7 @@ public class AggregationAlgorithm {
 		LOGGER.debug("");
 		LOGGER.debug("");
 		LOGGER.debug("");
-		LOGGER.debug("");
-		
+		LOGGER.debug("");		
 		
 		/*
 		 * PointService get measurements for track 
@@ -114,16 +113,43 @@ public class AggregationAlgorithm {
 
 		Point nextPoint = pointService.getNextPoint(trackID);
 
+		//TODO remove
+		int count = 0;
+		
 		while (nextPoint != null) {
+			
+			/*
+			 * check if point is fit for aggregation (one or more value not null or 0)
+			 */
+			if(!pointService.isFitForAggregation(nextPoint)){
+				LOGGER.info("Skipping original point " + nextPoint.getID() + ". All values are null or 0.");
+				nextPoint = pointService.getNextPoint(trackID);
+				continue;
+			}
 
 			/*
 			 * get nearest neighbor from resultSet
 			 */
-
+			
 			Point nearestNeighbor = pointService.getNearestNeighbor(
 					nextPoint.getID(), distance);
 
+			List<Point> pointList = new ArrayList<>();
+			
+			pointList.add(nextPoint);
+			
 			if (nearestNeighbor != null) {
+				
+				/*
+				 * check if point is fit for aggregation (one or more value not null or 0)
+				 */
+				if(!pointService.isFitForAggregation(nearestNeighbor)){
+					LOGGER.info("Skipping result set point " + nearestNeighbor.getID() + ". All values are null or 0.");
+					nextPoint = pointService.getNextPoint(trackID);
+					continue;
+				}
+				
+				pointList.add(nearestNeighbor);
 
 				/*
 				 * if there is one
@@ -131,13 +157,22 @@ public class AggregationAlgorithm {
 				 * aggregate values (avg, function should be
 				 * replaceable)
 				 */
-				pointService.aggregate(nextPoint, nearestNeighbor);
+				Point aggregatedPoint = pointService.aggregate(nextPoint, nearestNeighbor);
+
+				pointList.add(aggregatedPoint);
+				
+				//TODO remove
+//				try {
+//					CSVExport.exportAsCSV(pointList, File.createTempFile(count + "-aggregation", ".csv").getAbsolutePath());
+//				} catch (IOException e) {
+//					LOGGER.error("Could not export resultSet as CSV:", e);
+//				}
 				/*
 				 * PointService replace point in resultSet with aggregated
 				 * point
 				 */
 				pointService.updateResultSet(nearestNeighbor.getID(),
-						nextPoint);
+						aggregatedPoint);
 
 			} else {
 				/*
@@ -148,8 +183,17 @@ public class AggregationAlgorithm {
 				LOGGER.info("No nearest neighbor found for " + nextPoint.getID() + ". Adding to resultSet.");
 				
 				pointService.addToResultSet(nextPoint);
-			}
 
+				//TODO remove
+//				try {
+//					CSVExport.exportAsCSV(pointList, File.createTempFile(count + "-aggregation", ".csv").getAbsolutePath());
+//				} catch (IOException e) {
+//					LOGGER.error("Could not export resultSet as CSV:", e);
+//				}
+			}
+			
+			count++;
+			
 			/*
 			 * continue with next point in track
 			 */

@@ -43,5 +43,7 @@ public interface PointService {
 	boolean updateResultSet(String idOfPointToBeReplaced, Point replacementPoint);
 
 	List<Point> getResultSet();
+
+	boolean isFitForAggregation(Point nextPoint);
 	
 }

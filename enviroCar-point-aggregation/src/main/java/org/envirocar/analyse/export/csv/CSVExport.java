@@ -26,6 +26,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.ObjectInputStream.GetField;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -67,7 +68,7 @@ public class CSVExport {
 
 	private static String createCSVHeader() {
 		
-		String result = "ID;lon;lat;NumberOfPointsUsed;NumberOfTracksUsed;";
+		String result = "ID;lon;lat;GeneralNumberOfPointsUsed;GeneralNumberOfTracksUsed;";
 		
 		Iterator<String> propertyNameIterator = Properties.getPropertiesOfInterestDatatypeMapping().keySet().iterator();
 				
@@ -75,6 +76,10 @@ public class CSVExport {
 			String propertyName = (String) propertyNameIterator.next();
 			
 			result = result.concat(propertyName);
+			
+			result = result.concat(";");
+			
+			result = result.concat(propertyName + "NumberOfPointsUsed");
 			
 			if(propertyNameIterator.hasNext()){
 				result = result.concat(";");
@@ -99,6 +104,10 @@ public class CSVExport {
 			String propertyName = (String) propertyNameIterator.next();
 			
 			result = result.concat(String.valueOf(propertyMap.get(propertyName)));
+			
+			result = result.concat(";");
+			
+			result = result.concat(String.valueOf(point.getNumberOfPointsUsedForAggregation(propertyName)));
 			
 			if(propertyNameIterator.hasNext()){
 				result = result.concat(";");

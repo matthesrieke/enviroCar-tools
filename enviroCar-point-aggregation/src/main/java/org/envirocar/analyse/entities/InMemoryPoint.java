@@ -39,32 +39,34 @@ public class InMemoryPoint implements Point {
 	private List<String> tracksUsedForAggregation;
 	private int numberOfTracksUsedForAggregation;
 	private String lastContributingTrack;
+
+	//TODO remove
+//	public InMemoryPoint(String id, double x, double y, Map<String, Object> propertyMap, String trackID){
+//		this.id = id;
+//		this.x = x;
+//		this.y = y;	
+//		this.propertyMap = propertyMap;
+//		tracksUsedForAggregation = new ArrayList<>();
+//		propertyPointsUsedForAggregationMap = new HashMap<>();
+//		tracksUsedForAggregation.add(trackID);
+//	}
 	
-	public InMemoryPoint(String id, double x, double y, Map<String, Object> propertyMap, String trackID){
-		this.id = id;
-		this.x = x;
-		this.y = y;	
-		this.propertyMap = propertyMap;
-		tracksUsedForAggregation = new ArrayList<>();
-		propertyPointsUsedForAggregationMap = new HashMap<>();
-		tracksUsedForAggregation.add(trackID);
-	}
-	
-	public InMemoryPoint(String id, double x, double y, Map<String, Object> propertyMap, int numberOfPointsUsedForAggregation, List<? extends Object> contributingTracks){
-		this.id = id;
-		this.x = x;
-		this.y = y;	
-		this.propertyMap = propertyMap;		
-		this.numberOfPointsUsedForAggregation = numberOfPointsUsedForAggregation;		
-		propertyPointsUsedForAggregationMap = new HashMap<>();
-		tracksUsedForAggregation = new ArrayList<>();
-		
-		for (Object object : contributingTracks) {
-			if(object instanceof String){
-				tracksUsedForAggregation.add((String)object);
-			}
-		}
-	}
+	//TODO remove
+//	public InMemoryPoint(String id, double x, double y, Map<String, Object> propertyMap, int numberOfPointsUsedForAggregation, List<? extends Object> contributingTracks){
+//		this.id = id;
+//		this.x = x;
+//		this.y = y;	
+//		this.propertyMap = propertyMap;		
+//		this.numberOfPointsUsedForAggregation = numberOfPointsUsedForAggregation;		
+//		propertyPointsUsedForAggregationMap = new HashMap<>();
+//		tracksUsedForAggregation = new ArrayList<>();
+//		
+//		for (Object object : contributingTracks) {
+//			if(object instanceof String){
+//				tracksUsedForAggregation.add((String)object);
+//			}
+//		}
+//	}
 	
 	public InMemoryPoint(String id, double x, double y, Map<String, Object> propertyMap, int numberOfPointsUsedForAggregation, int numberOfTracksUsedForAggregation, String lastContributingTrack, Map<String, Integer> propertyPointsUsedForAggregationMap){
 		this.id = id;
@@ -75,6 +77,18 @@ public class InMemoryPoint implements Point {
 		this.numberOfTracksUsedForAggregation = numberOfTracksUsedForAggregation;	
 		this.lastContributingTrack = lastContributingTrack;	
 		this.propertyPointsUsedForAggregationMap = propertyPointsUsedForAggregationMap;
+	}
+	
+	public InMemoryPoint(Point otherPoint){
+		this.id = otherPoint.getID();
+		this.x = otherPoint.getX();
+		this.y = otherPoint.getY();
+		this.propertyMap = otherPoint.getPropertyMap();	
+		this.numberOfPointsUsedForAggregation = otherPoint.getNumberOfPointsUsedForAggregation();	
+		this.numberOfTracksUsedForAggregation = otherPoint.getNumberOfTracksUsedForAggregation();	
+		this.lastContributingTrack = otherPoint.getLastContributingTrack();
+		tracksUsedForAggregation = otherPoint.getTracksUsedForAggregation();
+		this.propertyPointsUsedForAggregationMap = otherPoint.getPropertyPointsUsedForAggregationMap();
 	}
 	
 	public InMemoryPoint(){
@@ -173,13 +187,18 @@ public class InMemoryPoint implements Point {
 		if (propertyPointsUsedForAggregationMap.containsKey(propertyName)) {
 			return propertyPointsUsedForAggregationMap.get(propertyName);
 		}
-		return 0;
+		return 1;
 	}
 
 	@Override
 	public void setNumberOfPointsUsedForAggregation(int numberOfPoints,
 			String propertyName) {
 		propertyPointsUsedForAggregationMap.put(propertyName, numberOfPoints);		
+	}
+
+	@Override
+	public Map<String, Integer> getPropertyPointsUsedForAggregationMap() {		
+		return propertyPointsUsedForAggregationMap;
 	}
 
 }
