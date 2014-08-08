@@ -1,3 +1,25 @@
+/**
+ * Copyright (C) 2014
+ * by 52 North Initiative for Geospatial Open Source Software GmbH
+ *
+ * Contact: Andreas Wytzisk
+ * 52 North Initiative for Geospatial Open Source Software GmbH
+ * Martin-Luther-King-Weg 24
+ * 48155 Muenster, Germany
+ * info@52north.org
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.envirocar.analyse.properties;
 
 import java.io.IOException;
@@ -20,11 +42,11 @@ public class Properties {
 	
 	private static Map<String, Class<?>> propertiesOfInterestDatatypeMapping;
 	
-	public static String baseURL;
+	private static String baseURL;
 	
-	public static String requestTrackURL;
+	private static String requestTrackURL;
 
-	public static String requestTracksWithinBboxURL;
+	private static String requestTracksWithinBboxURL;
 	
 	public static Object getProperty(String propertyName){
 		return getProperties().getProperty(propertyName);
@@ -34,7 +56,7 @@ public class Properties {
 		
 		if(properties == null){
 			
-			java.util.Properties properties = new java.util.Properties();
+			properties = new java.util.Properties();
 	        InputStream in = null;
 	        try {
 	            in = PostgresPointService.class.getResourceAsStream(PROPERTIES);
@@ -72,11 +94,21 @@ public class Properties {
 	}
 
 	public static String getRequestTrackURL() {
-		return getBaseURL() + "tracks/";
+		
+		if(requestTrackURL == null || requestTrackURL.equals("")){
+			requestTrackURL = getBaseURL() + "tracks/";
+		}
+		
+		return requestTrackURL;
 	}
 
 	public static String getRequestTracksWithinBboxURL() {
-		return getBaseURL() + "tracks?bbox=";
+		
+		if(requestTracksWithinBboxURL == null || requestTracksWithinBboxURL.equals("")){
+			requestTracksWithinBboxURL = getBaseURL() + "tracks?bbox=";
+		}
+		
+		return requestTracksWithinBboxURL;
 	}
 	
 	//TODO make configurable
