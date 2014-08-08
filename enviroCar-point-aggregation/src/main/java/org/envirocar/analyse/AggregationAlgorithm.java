@@ -208,7 +208,7 @@ public class AggregationAlgorithm {
 		 * get tracks
 		 */
 				
-        List<String> trackIDs = getTracks(bbox);
+        List<String> trackIDs = getTrackIDs(minx, miny, maxx, maxy);
 		
 		/*
 		 * foreach track
@@ -224,7 +224,7 @@ public class AggregationAlgorithm {
 		}
 	}
 	
-	private List<String> getTracks(Geometry bbox){
+	public List<String> getTrackIDs(double minx, double miny, double maxx, double maxy){
 		
 		List<String> result = new ArrayList<>();
         
