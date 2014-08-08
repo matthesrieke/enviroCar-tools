@@ -66,12 +66,16 @@ public class PostgresPointService implements PointService {
 	private String aggregated_MeasurementsTableName = "aggregated_measurements";// TODO
 	private String original_MeasurementsTableName = "original_measurements";// TODO from
 																				// properties
+	private String measurementRelationsTableName = "measurement_relations";// TODO from properties
+	
 	private String spatial_ref_sys = "4326";// TODO from properties
 	private String id_exp = "$id$";
 	private String distance_exp = "$distance$";
 	private String table_name_exp = "$tablename$";
+	private String geomFromText_exp = "$geom_from_text$";
 	private AggregationAlgorithm algorithm;
 	private Map<String, ResultSet> trackDatabasePointsResultSetMap;
+	private Map<String, List<Point>> trackMeasurementsAsPointsMap;
 
 	private String idField = "id";
 	private String generalNumberOfContributingPointsField = "generalnumberofcontributingpoints";
@@ -102,12 +106,21 @@ public class PostgresPointService implements PointService {
 			+ "ID VARCHAR(24) NOT NULL PRIMARY KEY, "
 			+ "TRACKID VARCHAR(24)," + "CO2 DOUBLE PRECISION,"
 			+ "SPEED DOUBLE PRECISION)";
+	
+	public final String pgMeasurementRelationsTableCreationString = "CREATE TABLE "
+			+ measurementRelationsTableName + " ("
+			+ "id VARCHAR(24) NOT NULL PRIMARY KEY, "
+			+ "aggregated_measurement_id VARCHAR(24))";
 
 	public String pgNearestNeighborCreationString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(w.the_geom,h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h, "
 			+ "(select * from " + original_MeasurementsTableName + " where " + idField + "='"
 			+ id_exp
 			+ "') w "
 			+ "where ST_DWithin(w." + geometryEncodedField + ",h." + geometryEncodedField + ","
+			+ distance_exp + ") " + "order by " + distField + " ASC;";
+	
+	public String pgNearestNeighborCreationString2 = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(" + geomFromText_exp + ",h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h, "
+			+ "where ST_DWithin(" + geomFromText_exp + ",h." + geometryEncodedField + ","
 			+ distance_exp + ") " + "order by " + distField + " ASC;";
 
 	public final String addGeometryColumnToAggregated_MeasurementsTableString = "SELECT AddGeometryColumn( '"
@@ -127,6 +140,7 @@ public class PostgresPointService implements PointService {
 	public PostgresPointService(AggregationAlgorithm algorithm) {
 		this.algorithm = algorithm;
 		trackDatabasePointsResultSetMap = new HashMap<>();
+		trackMeasurementsAsPointsMap = new HashMap<>();
 		
 		createConnection();
 		createTable(pgOriginalMeasurementsTableCreationString, original_MeasurementsTableName);
@@ -136,23 +150,17 @@ public class PostgresPointService implements PointService {
 	@Override
 	public Point getNextPoint(String trackID) {
 		
-		ResultSet rs = trackDatabasePointsResultSetMap.get(trackID);
-		
-		try {
-			if(!rs.next()){
-				return null;
-			}
-		} catch (SQLException e) {
-			LOGGER.error("Could access current resultset entry.", e);
-		}
-		
-		try {
-			return createPointFromCurrentResultSetEntry(rs);
-		} catch (SQLException e) {
-			LOGGER.error("Could not create point from current resultset entry.", e);
-		}
-		
-		return null;
+		Iterator<Point> measurementIterator =  trackMeasurementsAsPointsMap.get(trackID).iterator();
+
+		if(!measurementIterator.hasNext()){
+			return null;
+		}		
+			
+		Point result = measurementIterator.next();
+			
+		measurementIterator.remove();
+			
+		return result;
 	}
 
 	@Override
@@ -180,7 +188,7 @@ public class PostgresPointService implements PointService {
 					}
 				}
 				
-				createPointsFromJSON(features, trackID, algorithm.getBbox());
+				createPointsFromJSON(features, trackID, algorithm != null ? algorithm.getBbox() : null);
 				
 			} catch (MalformedURLException e) {
 				LOGGER.error("Malformed URL: " + url == null ? null : url.toString(), e);
@@ -211,15 +219,16 @@ public class PostgresPointService implements PointService {
 
 				if (o.equals("features")) {
 					features = (ArrayList<?>) entry;
+					break;
 				}
 			}
 			
-			createPointsFromJSON(features, trackID, algorithm.getBbox());
+			createPointsFromJSON(features, trackID, algorithm != null ? algorithm.getBbox() : null);
 			
 		} catch (MalformedURLException e) {
 			LOGGER.error("Malformed URL: " + url == null ? null : url.toString(), e);
 		} catch (IOException e) {
-			e.printStackTrace();
+			LOGGER.error("Error getting measurements of track:" + trackID, e);
 		}
 		
 	}
@@ -506,11 +515,7 @@ public class PostgresPointService implements PointService {
 				source.setNumberOfPointsUsedForAggregation(numberOfPointsUsedForAggregation + 1, propertyName);
 				
 				LOGGER.debug("Value of " + propertyName + " of point " + closestPointInRange.getID() + " = " + d);
-				
-//				summedUpValues = summedUpValues
-//						+ d;
-//				
-//				return summedUpValues / 2;
+
 				return weightedAvg;
 			}
 		}
@@ -616,7 +621,9 @@ public class PostgresPointService implements PointService {
 	}
 	
     private void createPointsFromJSON(ArrayList<?> features, String trackID, Geometry bbox) {
-	    	    	
+    	
+    	List<Point> measurementsOfTrack = new ArrayList<>();
+    	
     	for (Object object : features) {
 
 			if (object instanceof LinkedHashMap<?, ?>) {
@@ -652,17 +659,16 @@ public class PostgresPointService implements PointService {
 
 						Map<String, Object> propertiesofInterestMap = Utils.getValuesFromFromJSON(phenomenonsMap);
 						
-						insertPoint(id, coordinatesXY[0], coordinatesXY[1], trackID, propertiesofInterestMap, true);
+						Point point = new InMemoryPoint(id, coordinatesXY[0], coordinatesXY[1], propertiesofInterestMap, 0, 0, trackID, new HashMap<String, Integer>());
+						
+						measurementsOfTrack.add(point);
+						
 					}
 				}
 			}
 		}
     	
-    	String sqlQuery = selectAllMeasurementsofTrackQueryString + "'" + trackID + "';";
-    	
-    	ResultSet rs = executeQueryStatement(sqlQuery);
-    	
-    	trackDatabasePointsResultSetMap.put(trackID, rs);
+    	trackMeasurementsAsPointsMap.put(trackID, measurementsOfTrack);
     	
 	}
 	
