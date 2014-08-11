@@ -84,9 +84,11 @@ public class Utils {
 		for (String propertyName : Properties.getPropertiesOfInterestDatatypeMapping().keySet()) {
 			Object propertyObject = phenomenonMap.get(propertyName);
 			
-			if(propertyObject instanceof LinkedHashMap<?, ?>){
+            if (propertyObject == null){
+            	result.put(propertyName, 0.0);//TODO handle non number properties
+			}else if(propertyObject instanceof LinkedHashMap<?, ?>){
 				result.put(propertyName, ((LinkedHashMap<?, ?>)propertyObject).get("value"));
-			}
+			} 
 			
 		}
 				

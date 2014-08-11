@@ -132,7 +132,7 @@ public class AggregationAlgorithm {
 			 */
 			
 			Point nearestNeighbor = pointService.getNearestNeighbor(
-					nextPoint.getID(), distance);
+					nextPoint, distance);
 
 			List<Point> pointList = new ArrayList<>();
 			
@@ -182,7 +182,10 @@ public class AggregationAlgorithm {
 				 */					
 				LOGGER.info("No nearest neighbor found for " + nextPoint.getID() + ". Adding to resultSet.");
 				
-				pointService.addToResultSet(nextPoint);
+				/*
+				 * add point to result set, give it a new id
+				 */
+				pointService.addToResultSet(nextPoint, true);
 
 				//TODO remove
 //				try {
