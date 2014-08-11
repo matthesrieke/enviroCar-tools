@@ -36,9 +36,9 @@ public interface PointService {
 	
 	void getMeasurementsOfTrack(String trackID);
 
-	Point getNearestNeighbor(String pointID, double distance);
+	Point getNearestNeighbor(Point point, double distance);
 
-	void addToResultSet(Point newPoint);
+	void addToResultSet(Point newPoint, boolean allocateNewID);
 	
 	boolean updateResultSet(String idOfPointToBeReplaced, Point replacementPoint);
 
