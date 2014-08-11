@@ -303,12 +303,6 @@ public class PostgresPointService implements PointService {
 					double[] resultXY = Utils
 							.convertWKTPointToXY(resultGeomAsText);
 
-//					LOGGER.debug(resultID);// TODO remove
-//					LOGGER.debug("" + resultSet.getDouble(distField));// TODO
-//																	// remove
-//					LOGGER.debug(resultSet.getString(geometryPlainTextField));// TODO
-//																	// remove
-
 					Point resultPoint = new InMemoryPoint(resultID,
 							resultXY[0], resultXY[1], propertyMap,
 							resultNumberOfContributingPoints,
@@ -343,12 +337,6 @@ public class PostgresPointService implements PointService {
 		updateString = updateString.replace(id_exp, idOfPointToBeUpdated);
 				
 		return executeUpdateStatement(updateString);
-	}
-	
-	private String createST_GeometryFromTextStatement(double x, double y){
-		
-		return "ST_GeomFromText('POINT(" + x
-				+ " " + y + ")', " + spatial_ref_sys + ")";		
 	}
 
 	@Override
@@ -452,6 +440,12 @@ public class PostgresPointService implements PointService {
 		if(allocateNewID){
 			insertMeasurementRelation(oldID, newPoint.getID());
 		}
+	}
+	
+	private String createST_GeometryFromTextStatement(double x, double y){
+		
+		return "ST_GeomFromText('POINT(" + x
+				+ " " + y + ")', " + spatial_ref_sys + ")";		
 	}
 	
 	private boolean insertMeasurementRelation(String originalID, String aggregatedID){
@@ -707,7 +701,7 @@ public class PostgresPointService implements PointService {
 
 						Map<String, Object> propertiesofInterestMap = Utils.getValuesFromFromJSON(phenomenonsMap);
 						
-						Point point = new InMemoryPoint(id, coordinatesXY[0], coordinatesXY[1], propertiesofInterestMap, 0, 0, trackID, new HashMap<String, Integer>());
+						Point point = new InMemoryPoint(id, coordinatesXY[0], coordinatesXY[1], propertiesofInterestMap, 1, 1, trackID, new HashMap<String, Integer>());
 						
 						measurementsOfTrack.add(point);
 						
@@ -829,65 +823,6 @@ public class PostgresPointService implements PointService {
 		return true;
 	}
 
-	private boolean insertPoint(String id, double x, double y, String trackID,
-			int numberOfPoints, int numberOfTracks, Map<String, Object> propertiesofInterestMap, boolean checkIfExists) {
-
-		if(checkIfExists){
-			String statement = "select * from " + aggregated_MeasurementsTableName + " where "+ idField +"='" + id + "';";
-			
-			ResultSet rs = executeQueryStatement(statement);
-			
-			try {
-				if(rs.next()){
-					return false;
-				}
-			} catch (SQLException e) {
-				LOGGER.error("Could not check if row with id=" + id + " and "+ trackIDField +"=" + trackID + " exists.", e);
-				return false;
-			}
-		}
-		
-		String statement = createInsertPointStatement(id, x, y, trackID,
-				numberOfPoints, numberOfTracks, propertiesofInterestMap);
-
-		return executeUpdateStatement(statement);
-	}
-
-	private String createInsertPointStatement(String id, double x, double y,
-			String trackID, int numberOfPoints, int numberOfTracks,
-			Map<String, Object> propertiesofInterestMap) {
-
-		String columnNameString = "( "+ idField +", "+ geometryEncodedField +", "+ generalNumberOfContributingPointsField +", "+ generalnumberOfContributingTracksField +", "+ lastContributingTrackField +", ";
-		String valueString = "( '" + id + "', ST_GeomFromText('POINT(" + x
-				+ " " + y + ")', " + spatial_ref_sys + "), " + numberOfPoints
-				+ ", " + numberOfTracks + ", '" + trackID + "', ";
-
-		Iterator<String> propertyNameIterator = Properties
-				.getPropertiesOfInterestDatatypeMapping().keySet().iterator();
-
-		while (propertyNameIterator.hasNext()) {
-			String propertyName = (String) propertyNameIterator.next();
-
-			columnNameString = columnNameString.concat(propertyName
-					.toLowerCase());
-			valueString = valueString.concat(String
-					.valueOf(propertiesofInterestMap.get(propertyName)));
-
-			if (propertyNameIterator.hasNext()) {
-				columnNameString = columnNameString.concat(", ");
-				valueString = valueString.concat(", ");
-			} else {
-				columnNameString = columnNameString.concat(")");
-				valueString = valueString.concat(")");
-			}
-		}
-
-		String statement = "INSERT INTO " + aggregated_MeasurementsTableName
-				+ columnNameString + "VALUES" + valueString + ";";
-
-		return statement;
-	}
-
 	private boolean insertPoint(Point point,  boolean checkIfExists) {
 
 		if(checkIfExists){
@@ -957,63 +892,6 @@ public class PostgresPointService implements PointService {
 				+ columnNameString + "VALUES" + valueString + ";";
 
 		return statement;
-	}
-	
-	private boolean insertPoint(String id, double x, double y, String trackID, Map<String, Object> propertiesofInterestMap, boolean checkIfExists) {
-
-		if(checkIfExists){
-			String statement = "select * from "+ original_MeasurementsTableName +" where "+ idField +"='" + id + "' and "+ trackIDField +"='" + trackID + "';";
-			
-			ResultSet rs = executeQueryStatement(statement);
-			
-			try {
-				if(rs.next()){
-					return false;
-				}
-			} catch (SQLException e) {
-				LOGGER.error("Could not check if row with id=" + id + " and "+ trackIDField +"=" + trackID + " exists.", e);
-				return false;
-			}
-		}
-		
-		String statement = createInsertPointStatement(id, x, y, trackID,
-				propertiesofInterestMap);
-
-		return executeUpdateStatement(statement);
-	}
-	
-	private String createInsertPointStatement(String id, double x, double y,
-			String trackID,	Map<String, Object> propertiesofInterestMap) {
-
-		String columnNameString = "( "+ idField +", "+ geometryEncodedField +", "+ trackIDField +", ";
-		String valueString = "( '" + id + "', ST_GeomFromText('POINT(" + x
-				+ " " + y + ")', " + spatial_ref_sys + "), '" + trackID + "', ";
-
-		Iterator<String> propertyNameIterator = Properties
-				.getPropertiesOfInterestDatatypeMapping().keySet().iterator();
-
-		while (propertyNameIterator.hasNext()) {
-			String propertyName = (String) propertyNameIterator.next();
-
-			columnNameString = columnNameString.concat(propertyName
-					.toLowerCase());
-			valueString = valueString.concat(String
-					.valueOf(propertiesofInterestMap.get(propertyName)));
-
-			if (propertyNameIterator.hasNext()) {
-				columnNameString = columnNameString.concat(", ");
-				valueString = valueString.concat(", ");
-			} else {
-				columnNameString = columnNameString.concat(")");
-				valueString = valueString.concat(")");
-			}
-		}
-
-		String statement = "INSERT INTO " + original_MeasurementsTableName
-				+ columnNameString + "VALUES" + valueString + ";";
-
-		return statement;
-	}
-	
+	}	
 	
 }
