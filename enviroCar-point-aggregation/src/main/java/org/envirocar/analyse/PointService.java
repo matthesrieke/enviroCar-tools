@@ -32,8 +32,6 @@ public interface PointService {
 
 	Point getNextPoint(String trackID);
 
-	void getMeasurementsOfTracks(List<String> trackIDs);
-	
 	void getMeasurementsOfTrack(String trackID);
 
 	Point getNearestNeighbor(Point point, double distance);

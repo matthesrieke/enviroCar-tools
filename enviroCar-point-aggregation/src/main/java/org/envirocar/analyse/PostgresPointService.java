@@ -83,7 +83,6 @@ public class PostgresPointService implements PointService {
 	private final String lastContributingTrack_value_exp = "$lastContributingTrack_value$";
 	private final String geometryEncoded_value_exp = "$geometryEncoded_value$";
 	
-	private AggregationAlgorithm algorithm;
 	private Map<String, List<Point>> trackMeasurementsAsPointsMap;
 
 	private String idField = "id";
@@ -147,13 +146,15 @@ public class PostgresPointService implements PointService {
 	public final String deletePointFromTableString = "delete from " + table_name_exp + " where " + idField + "=";
 	
 	public final String updateAggregatedMeasurementString = "UPDATE " + aggregated_MeasurementsTableName + " SET " + speedField + " = " + speed_value_exp + ", " + speedNumberOfContributingPointsField + " = " + speedNumberOfContributingPoints_value_exp + ", " + co2Field + " = " + co2_value_exp + ", " + co2NumberOfContributingPointsField + " = " + co2NumberOfContributingPoints_value_exp + ", " + generalNumberOfContributingPointsField + " = " + generalNumberOfContributingPoints_value_exp + ", " + generalnumberOfContributingTracksField + " = " + generalnumberOfContributingTracks_value_exp + ", " + lastContributingTrackField + " = '" + lastContributingTrack_value_exp + "', " + geometryEncodedField + " = " + geometryEncoded_value_exp + " WHERE " + idField + " = '" + id_exp + "';";
+
+	private Geometry bbox;
 	
 	public PostgresPointService() {
 		this(null);
 	}
 	
-	public PostgresPointService(AggregationAlgorithm algorithm) {
-		this.algorithm = algorithm;
+	public PostgresPointService(Geometry bbox) {
+		this.bbox = bbox;
 		trackMeasurementsAsPointsMap = new HashMap<>();
 		
 		createConnection();
@@ -177,41 +178,6 @@ public class PostgresPointService implements PointService {
 		return result;
 	}
 
-	@Override
-	public void getMeasurementsOfTracks(List<String> trackIDs) {
-		
-		for (String trackID : trackIDs) {
-			
-			URL url = null;
-			try {
-				url = new URL(Properties.getRequestTrackURL() + trackID);
-				
-				InputStream in = url.openStream();
-
-				ObjectMapper objMapper = new ObjectMapper();
-
-				Map<?, ?> map = objMapper.readValue(in, Map.class);
-
-				ArrayList<?> features = null;
-
-				for (Object o : map.keySet()) {
-					Object entry = map.get(o);
-
-					if (o.equals("features")) {
-						features = (ArrayList<?>) entry;
-					}
-				}
-				
-				createPointsFromJSON(features, trackID, algorithm != null ? algorithm.getBbox() : null);
-				
-			} catch (MalformedURLException e) {
-				LOGGER.error("Malformed URL: " + url == null ? null : url.toString(), e);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-		
-	}
 
 	@Override
 	public void getMeasurementsOfTrack(String trackID) {
@@ -237,7 +203,7 @@ public class PostgresPointService implements PointService {
 				}
 			}
 			
-			createPointsFromJSON(features, trackID, algorithm != null ? algorithm.getBbox() : null);
+			createPointsFromJSON(features, trackID, bbox);
 			
 		} catch (MalformedURLException e) {
 			LOGGER.error("Malformed URL: " + url == null ? null : url.toString(), e);
@@ -400,6 +366,12 @@ public class PostgresPointService implements PointService {
 		LOGGER.debug("NumberOfPoints " + aggregatedPoint.getNumberOfPointsUsedForAggregation());
 		
 		insertMeasurementRelation(point.getID(), nearestNeighborPoint.getID());
+		
+		/*
+		 * store result in DB
+		 */
+		updateResultSet(nearestNeighborPoint.getID(),
+				aggregatedPoint);
 		
 		return aggregatedPoint;
 	}
