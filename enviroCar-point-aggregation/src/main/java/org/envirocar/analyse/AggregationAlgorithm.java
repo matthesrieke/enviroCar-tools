@@ -197,17 +197,18 @@ public class AggregationAlgorithm {
 		 */
 		runAlgorithm(new Iterator<Point>() {
 			
-			Point next;
+			Point next = pointService.getNextPoint(trackID);
 
 			@Override
 			public boolean hasNext() {
-				next = pointService.getNextPoint(trackID);
 				return next != null;
 			}
 
 			@Override
 			public Point next() {
-				return next;
+				Point result = next;
+				next = pointService.getNextPoint(trackID);
+				return result;
 			}
 
 			@Override
