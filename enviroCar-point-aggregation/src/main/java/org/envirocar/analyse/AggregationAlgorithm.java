@@ -27,6 +27,7 @@ import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +58,7 @@ public class AggregationAlgorithm {
 	private double maxx, maxy, minx, miny;
 	
 	public AggregationAlgorithm(double distance){
-		pointService = new PostgresPointService(this);
+		pointService = new PostgresPointService(this.getBbox());
 		this.distance = distance;
 	}
 	
@@ -83,47 +84,19 @@ public class AggregationAlgorithm {
         
         bbox =  Utils.geometryFactory.createPolygon(coordinates);
 		this.distance = distance;
-		pointService = new PostgresPointService(this);
+		pointService = new PostgresPointService(this.getBbox());
 	}
 	
-	public void runAlgorithm(String trackID){
-		
-		LOGGER.debug("");
-		LOGGER.debug("");
-		LOGGER.debug("");
-		LOGGER.debug("");
-		
-		LOGGER.debug("Track: " + trackID);
-		LOGGER.debug("ResultSet size: " + pointService.getResultSet().size());
-		
-		LOGGER.debug("");
-		LOGGER.debug("");
-		LOGGER.debug("");
-		LOGGER.debug("");		
-		
-		/*
-		 * PointService get measurements for track 
-		 */
-		
-		pointService.getMeasurementsOfTrack(trackID);
-		
-		/*
-		 * Pointservice get next measurement
-		 */
-
-		Point nextPoint = pointService.getNextPoint(trackID);
-
-		//TODO remove
-		int count = 0;
-		
-		while (nextPoint != null) {
+	public void runAlgorithm(Iterator<Point> newPoints) {
+		Point nextPoint;
+		while (newPoints.hasNext()) {
+			nextPoint = newPoints.next();
 			
 			/*
 			 * check if point is fit for aggregation (one or more value not null or 0)
 			 */
 			if(!pointService.isFitForAggregation(nextPoint)){
 				LOGGER.info("Skipping original point " + nextPoint.getID() + ". All values are null or 0.");
-				nextPoint = pointService.getNextPoint(trackID);
 				continue;
 			}
 
@@ -134,9 +107,9 @@ public class AggregationAlgorithm {
 			Point nearestNeighbor = pointService.getNearestNeighbor(
 					nextPoint, distance);
 
-			List<Point> pointList = new ArrayList<>();
-			
-			pointList.add(nextPoint);
+//			List<Point> pointList = new ArrayList<>();
+//			
+//			pointList.add(nextPoint);
 			
 			if (nearestNeighbor != null) {
 				
@@ -145,11 +118,10 @@ public class AggregationAlgorithm {
 				 */
 				if(!pointService.isFitForAggregation(nearestNeighbor)){
 					LOGGER.info("Skipping result set point " + nearestNeighbor.getID() + ". All values are null or 0.");
-					nextPoint = pointService.getNextPoint(trackID);
 					continue;
 				}
 				
-				pointList.add(nearestNeighbor);
+//				pointList.add(nearestNeighbor);
 
 				/*
 				 * if there is one
@@ -157,9 +129,9 @@ public class AggregationAlgorithm {
 				 * aggregate values (avg, function should be
 				 * replaceable)
 				 */
-				Point aggregatedPoint = pointService.aggregate(nextPoint, nearestNeighbor);
+				pointService.aggregate(nextPoint, nearestNeighbor);
 
-				pointList.add(aggregatedPoint);
+//				pointList.add(aggregatedPoint);
 				
 				//TODO remove
 //				try {
@@ -171,8 +143,8 @@ public class AggregationAlgorithm {
 				 * PointService replace point in resultSet with aggregated
 				 * point
 				 */
-				pointService.updateResultSet(nearestNeighbor.getID(),
-						aggregatedPoint);
+//				pointService.updateResultSet(nearestNeighbor.getID(),
+//						aggregatedPoint);
 
 			} else {
 				/*
@@ -194,14 +166,55 @@ public class AggregationAlgorithm {
 //					LOGGER.error("Could not export resultSet as CSV:", e);
 //				}
 			}
-			
-			count++;
-			
-			/*
-			 * continue with next point in track
-			 */
-			nextPoint = pointService.getNextPoint(trackID);
 		}
+	}
+	
+	
+	public void runAlgorithm(final String trackID){
+		
+		LOGGER.debug("");
+		LOGGER.debug("");
+		LOGGER.debug("");
+		LOGGER.debug("");
+		
+		LOGGER.debug("Track: " + trackID);
+		LOGGER.debug("ResultSet size: " + pointService.getResultSet().size());
+		
+		LOGGER.debug("");
+		LOGGER.debug("");
+		LOGGER.debug("");
+		LOGGER.debug("");		
+		
+		/*
+		 * PointService get measurements for track 
+		 */
+		
+		pointService.getMeasurementsOfTrack(trackID);
+		
+		/*
+		 * run the algorithm with a wrapper using the to-be-removed
+		 * in-memory storage of the pointService
+		 */
+		runAlgorithm(new Iterator<Point>() {
+			
+			Point next;
+
+			@Override
+			public boolean hasNext() {
+				next = pointService.getNextPoint(trackID);
+				return next != null;
+			}
+
+			@Override
+			public Point next() {
+				return next;
+			}
+
+			@Override
+			public void remove() {
+				
+			}
+		});
 		
 	}
 	
