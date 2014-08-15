@@ -77,7 +77,7 @@ public class Utils {
 
 	}
 	
-    public static Map<String, Object> getValuesFromFromJSON(LinkedHashMap<?, ?> phenomenonMap) {
+    public static Map<String, Object> getValuesFromFromJSON(Map<?, ?> phenomenonMap) {
 		
 		Map<String, Object> result = new HashMap<>();
 		
