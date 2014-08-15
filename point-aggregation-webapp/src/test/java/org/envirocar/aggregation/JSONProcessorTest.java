@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import org.envirocar.analyse.entities.Point;
 import org.junit.Assert;
@@ -27,6 +28,7 @@ import org.junit.Test;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.hamcrest.CoreMatchers.*;
 
@@ -35,7 +37,12 @@ public class JSONProcessorTest {
 	@Test
 	public void testProcessing() throws JsonParseException, JsonMappingException, IOException {
 		JSONProcessor jp = new JSONProcessor();
-		Iterator<Point> it = jp.initializeIterator("application/json", getClass().getResourceAsStream("/dummy-track.json"));
+		
+		ObjectMapper om = new ObjectMapper();
+		final Map<?, ?> json = om.readValue(getClass().getResourceAsStream("/dummy-track.json"),
+				Map.class);
+		
+		Iterator<Point> it = jp.initializeIterator(json);
 		
 		List<Point> result = new ArrayList<Point>();
 		
@@ -58,10 +65,4 @@ public class JSONProcessorTest {
 		Assert.assertThat(p.getY(), is(2.2));
 	}
 	
-	@Test(expected = IllegalArgumentException.class)
-	public void testUnsupportedContentType() throws JsonParseException, JsonMappingException, IOException {
-		JSONProcessor jp = new JSONProcessor();
-		jp.initializeIterator("application/xml", getClass().getResourceAsStream("/dummy-track.json"));
-	}
-
 }

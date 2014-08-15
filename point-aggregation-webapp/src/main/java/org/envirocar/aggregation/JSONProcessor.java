@@ -17,7 +17,6 @@
 package org.envirocar.aggregation;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -27,18 +26,10 @@ import org.envirocar.analyse.entities.Point;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class JSONProcessor {
 
-	public Iterator<Point> initializeIterator(String contentType, InputStream inputStream) throws JsonParseException, JsonMappingException, IOException {
-		if (!contentType.equals("application/json")) {
-			throw new IllegalArgumentException("Invalid ContentType");
-		}
-		
-		ObjectMapper om = new ObjectMapper();
-		Map<?, ?> json = om.readValue(inputStream, Map.class);
-
+	public Iterator<Point> initializeIterator(Map<?, ?> json) throws JsonParseException, JsonMappingException, IOException {
 		return new PointViaJsonIterator(json);
 	}
 	

@@ -157,7 +157,11 @@ public class PostgresPointService implements PointService {
 		this.bbox = bbox;
 		trackMeasurementsAsPointsMap = new HashMap<>();
 		
-		createConnection();
+		try {
+			createConnection();
+		} catch (ClassNotFoundException e) {
+			throw new IllegalStateException(e);
+		}
 		createTable(pgCreationString, aggregated_MeasurementsTableName, true);
 		createTable(pgMeasurementRelationsTableCreationString, measurementRelationsTableName, false);
 	}
@@ -686,8 +690,8 @@ public class PostgresPointService implements PointService {
     	
 	}
 	
-	private boolean createConnection() {
-
+	private boolean createConnection() throws ClassNotFoundException {
+		Class.forName("org.postgresql.Driver");
 		connectionURL = "jdbc:postgresql:" + getDatabasePath() + "/"
 				+ getDatabaseName();
 
