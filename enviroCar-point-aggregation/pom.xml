@@ -64,9 +64,9 @@
 			<version>1.0.13</version>
 		</dependency>
 		<dependency>
-			<groupId>org.postgresql.driver</groupId>
-			<artifactId>postgresql-jdbc-driver</artifactId>
-			<version>1.0.0</version>
+			<groupId>postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<version>9.1-901-1.jdbc4</version>
 		</dependency>
         <dependency>
             <artifactId>mongo-java-driver</artifactId>

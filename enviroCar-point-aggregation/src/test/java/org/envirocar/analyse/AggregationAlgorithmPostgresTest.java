@@ -35,7 +35,7 @@ public class AggregationAlgorithmPostgresTest {
 	private static final Logger LOGGER = LoggerFactory
 			.getLogger(AggregationAlgorithmPostgresTest.class);
 	
-	@Test
+//	@Test
 	public void testAlgorithm(){
 		
 		double maxx = 7.6339;
