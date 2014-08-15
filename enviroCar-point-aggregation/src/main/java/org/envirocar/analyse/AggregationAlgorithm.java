@@ -57,13 +57,17 @@ public class AggregationAlgorithm {
 	private PointService pointService;
 	private double maxx, maxy, minx, miny;
 	
-	public AggregationAlgorithm(double distance){
+	public AggregationAlgorithm() {
+		this(Double.parseDouble(Properties.getProperty("pointDistance")));
+	}
+	
+	public AggregationAlgorithm(double distance) {
 		pointService = new PostgresPointService(this.getBbox());
 		this.distance = distance;
 	}
 	
-	public AggregationAlgorithm(double minx, double miny, double maxx, double maxy, double distance){
-		
+	public AggregationAlgorithm(double minx, double miny, double maxx, double maxy){
+		this();
 		this.maxx = maxx;
 		this.maxy = maxy;
 		this.minx = minx;
@@ -83,7 +87,7 @@ public class AggregationAlgorithm {
             };
         
         bbox =  Utils.geometryFactory.createPolygon(coordinates);
-		this.distance = distance;
+		this.distance = Double.parseDouble(Properties.getProperty("pointDistance"));
 		pointService = new PostgresPointService(this.getBbox());
 	}
 	

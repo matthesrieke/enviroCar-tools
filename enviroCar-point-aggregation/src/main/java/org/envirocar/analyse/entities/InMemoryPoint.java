@@ -22,10 +22,12 @@
  */
 package org.envirocar.analyse.entities;
 
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.envirocar.analyse.util.Utils;
 
 
 public class InMemoryPoint implements Point {
@@ -171,6 +173,38 @@ public class InMemoryPoint implements Point {
 	@Override
 	public Map<String, Integer> getPropertyPointsUsedForAggregationMap() {		
 		return propertyPointsUsedForAggregationMap;
+	}
+
+	public static Point fromMap(Map<?, ?> featureMap, String trackID) {
+		Object geometryObject = featureMap.get("geometry");
+		
+		double[] coordinatesXY = new double[2];
+		
+		if (geometryObject instanceof Map<?, ?>) {
+			coordinatesXY = Utils.getCoordinatesXYFromJSON((LinkedHashMap<?, ?>) geometryObject);
+		}
+		
+		Object propertiesObject = featureMap.get("properties");				
+		
+		if (propertiesObject instanceof Map<?, ?>) {
+			Map<?, ?> propertiesMap = (Map<?, ?>) propertiesObject;
+
+			String id = String.valueOf(propertiesMap.get("id"));
+			
+			Object phenomenonsObject = propertiesMap.get("phenomenons");
+
+			if (phenomenonsObject instanceof Map<?, ?>) {
+				Map<?, ?> phenomenonsMap = (Map<?, ?>) phenomenonsObject;
+
+				Map<String, Object> propertiesofInterestMap = Utils.getValuesFromFromJSON(phenomenonsMap);
+				
+				Point point = new InMemoryPoint(id, coordinatesXY[0], coordinatesXY[1], propertiesofInterestMap, 1, 1, trackID, new HashMap<String, Integer>());
+				
+				return point;
+			}
+		}
+		
+		return null;
 	}
 
 }

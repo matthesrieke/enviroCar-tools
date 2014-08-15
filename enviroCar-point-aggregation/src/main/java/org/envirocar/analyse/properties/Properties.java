@@ -48,11 +48,11 @@ public class Properties {
 
 	private static String requestTracksWithinBboxURL;
 	
-	public static Object getProperty(String propertyName){
+	public static String getProperty(String propertyName){
 		return getProperties().getProperty(propertyName);
 	}
 	
-	public static java.util.Properties getProperties() {
+	public synchronized static java.util.Properties getProperties() {
 		
 		if(properties == null){
 			
