@@ -114,6 +114,8 @@ public class AggregationAlgorithm {
 			return;
 		}
 		
+		pointService.insertTrackIntoAggregatedTracksTable(trackId);
+		
 		Point nextPoint;
 		while (newPoints.hasNext()) {
 			nextPoint = newPoints.next();
@@ -194,6 +196,7 @@ public class AggregationAlgorithm {
 //				}
 			}
 		}
+		
 	}
 	
 	

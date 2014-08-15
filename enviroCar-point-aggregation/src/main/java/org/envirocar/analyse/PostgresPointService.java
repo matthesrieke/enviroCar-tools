@@ -315,8 +315,6 @@ public class PostgresPointService implements PointService {
 		updateResultSet(nearestNeighborPoint.getID(),
 				aggregatedPoint);
 		
-		insertTrackIntoAggregatedTracksTable(trackId);
-		
 		return aggregatedPoint;
 	}
 
@@ -790,7 +788,7 @@ public class PostgresPointService implements PointService {
 		return statement;
 	}	
 	
-	private boolean insertTrackIntoAggregatedTracksTable(String trackID) {
+	public boolean insertTrackIntoAggregatedTracksTable(String trackID) {
 		if (trackAlreadyAggregated(trackID)) {
 			return false;
 		}

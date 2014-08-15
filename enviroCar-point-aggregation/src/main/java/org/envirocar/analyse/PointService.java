@@ -41,5 +41,7 @@ public interface PointService {
 	boolean isFitForAggregation(Point nextPoint);
 
 	boolean trackAlreadyAggregated(String trackId);
+
+	boolean insertTrackIntoAggregatedTracksTable(String trackId);
 	
 }
