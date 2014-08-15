@@ -19,7 +19,6 @@ package org.envirocar.aggregation;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
@@ -34,11 +33,11 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.envirocar.analyse.AggregationAlgorithm;
-import org.envirocar.analyse.entities.Point;
+import org.envirocar.analyse.util.PointViaJsonMapIterator;
+import org.envirocar.analyse.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
@@ -90,24 +89,19 @@ public class ReceiveTracksServlet extends HttpServlet {
 		final String contentType = req.getHeader("Content-Type");
 		final InputStream stream = req.getInputStream();
 		
-		if (!"application/json".equals(contentType)) {
+		if (!(contentType != null && contentType.startsWith("application/json"))) {
 			throw new IllegalArgumentException("Invalid ContentType");
 		}
 		
-		ObjectMapper om = new ObjectMapper();
-		final Map<?, ?> json = om.readValue(stream, Map.class);
+		final Map<?, ?> json = Utils.parseJsonStream(stream);
 		
 		if (verifyRemoteHost(req.getRemoteHost())) {
 			this.executor.submit(new Runnable() {
 
 				public void run() {
-					try {
-						Iterator<Point> it = new JSONProcessor().initializeIterator(json);
+					PointViaJsonMapIterator it = new PointViaJsonMapIterator(json);
 						
-						algorithm.runAlgorithm(it);
-					} catch (IOException e) {
-						logger.warn(e.getMessage(), e);
-					}
+					algorithm.runAlgorithm(it, it.getOriginalTrackId());
 				}
 				
 			});

@@ -26,7 +26,6 @@ import java.io.File;
 import java.io.IOException;
 
 import org.envirocar.analyse.export.csv.CSVExport;
-import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +34,7 @@ public class AggregationAlgorithmPostgresTest {
 	private static final Logger LOGGER = LoggerFactory
 			.getLogger(AggregationAlgorithmPostgresTest.class);
 	
-//	@Test
-	public static void main(String[] args){
+	public static void main(String[] args) throws IOException{
 		
 		double maxx = 7.6339;
 		double maxy = 51.96;

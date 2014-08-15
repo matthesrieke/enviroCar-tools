@@ -22,10 +22,6 @@
  */
 package org.envirocar.analyse;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
@@ -37,7 +33,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,7 +44,6 @@ import org.envirocar.analyse.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Geometry;
 
@@ -90,8 +84,6 @@ public class PostgresPointService implements PointService {
 	private final String generalnumberOfContributingTracks_value_exp = "$generalnumberOfContributingTracks_value$";
 	private final String lastContributingTrack_value_exp = "$lastContributingTrack_value$";
 	private final String geometryEncoded_value_exp = "$geometryEncoded_value$";
-	
-	private Map<String, List<Point>> trackMeasurementsAsPointsMap;
 
 	private String idField = "id";
 	private String generalNumberOfContributingPointsField = "generalnumberofcontributingpoints";
@@ -156,7 +148,6 @@ public class PostgresPointService implements PointService {
 	
 	public PostgresPointService(Geometry bbox) {
 		this.bbox = bbox;
-		trackMeasurementsAsPointsMap = new HashMap<>();
 		
 		try {
 			createConnection();
@@ -168,58 +159,6 @@ public class PostgresPointService implements PointService {
 		createTable(pgAggregatedTracksTableCreationString, aggregatedTracksTableName, false);
 	}
 
-	@Override
-	public Point getNextPoint(String trackID) {
-		
-		Iterator<Point> measurementIterator =  trackMeasurementsAsPointsMap.get(trackID).iterator();
-
-		if(!measurementIterator.hasNext()){
-			return null;
-		}		
-			
-		Point result = measurementIterator.next();
-			
-		measurementIterator.remove();
-			
-		return result;
-	}
-
-
-	@Override
-	public void getMeasurementsOfTrack(String trackID) {
-		
-		URL url = null;
-		try {
-			url = new URL(Properties.getRequestTrackURL() + trackID);
-			
-			InputStream in = url.openStream();
-
-			ObjectMapper objMapper = new ObjectMapper();
-
-			Map<?, ?> map = objMapper.readValue(in, Map.class);
-
-			ArrayList<?> features = null;
-
-			for (Object o : map.keySet()) {
-				Object entry = map.get(o);
-
-				if (o.equals("features")) {
-					features = (ArrayList<?>) entry;
-					break;
-				}
-			}
-			
-			createPointsFromJSON(features, trackID, bbox);
-			
-		} catch (MalformedURLException e) {
-			LOGGER.error("Malformed URL: " + url == null ? null : url.toString(), e);
-		} catch (IOException e) {
-			LOGGER.error("Error getting measurements of track:" + trackID, e);
-		}
-		
-		insertTrackIntoAggregatedTracksTable(trackID);
-		
-	}
 
 	@Override
 	public Point getNearestNeighbor(Point point, double distance) {
@@ -340,7 +279,7 @@ public class PostgresPointService implements PointService {
 	}
 
 	@Override
-	public Point aggregate(Point point, Point nearestNeighborPoint) {
+	public Point aggregate(Point point, Point nearestNeighborPoint, String trackId) {
 		
 		Point aggregatedPoint = new InMemoryPoint(point);
 		
@@ -395,6 +334,18 @@ public class PostgresPointService implements PointService {
 				 * not a number, we cannot aggregate this currently
 				 */
 				result = result || false;
+			}
+		}
+		
+		/*
+		 * also check for bbox
+		 */
+		if (bbox != null) {
+			Coordinate pointCoordinate = new Coordinate(point.getX(), point.getY());
+			
+			if (!bbox.contains(Utils.geometryFactory
+						.createPoint(pointCoordinate))) {
+				return false;
 			}
 		}
 		
@@ -637,57 +588,6 @@ public class PostgresPointService implements PointService {
 		
 	}
 	
-    private void createPointsFromJSON(ArrayList<?> features, String trackID, Geometry bbox) {
-    	
-    	List<Point> measurementsOfTrack = new ArrayList<>();
-    	
-    	for (Object object : features) {
-
-			if (object instanceof LinkedHashMap<?, ?>) {
-				LinkedHashMap<?, ?> featureMap = (LinkedHashMap<?, ?>) object;
-
-				Object geometryObject = featureMap.get("geometry");
-				
-				double[] coordinatesXY = new double[2];
-				
-				if (geometryObject instanceof LinkedHashMap<?, ?>) {
-					coordinatesXY = Utils.getCoordinatesXYFromJSON((LinkedHashMap<?, ?>) geometryObject);
-				}
-				
-				Coordinate pointCoordinate = new Coordinate(coordinatesXY[0], coordinatesXY[1]);
-				
-				if (bbox != null) {
-					if (!bbox.contains(Utils.geometryFactory
-							.createPoint(pointCoordinate))) {
-						continue;
-					}
-				}
-				Object propertiesObject = featureMap.get("properties");				
-				
-				if (propertiesObject instanceof LinkedHashMap<?, ?>) {
-					LinkedHashMap<?, ?> propertiesMap = (LinkedHashMap<?, ?>) propertiesObject;
-
-					String id = String.valueOf(propertiesMap.get("id"));
-					
-					Object phenomenonsObject = propertiesMap.get("phenomenons");
-
-					if (phenomenonsObject instanceof LinkedHashMap<?, ?>) {
-						LinkedHashMap<?, ?> phenomenonsMap = (LinkedHashMap<?, ?>) phenomenonsObject;
-
-						Map<String, Object> propertiesofInterestMap = Utils.getValuesFromFromJSON(phenomenonsMap);
-						
-						Point point = new InMemoryPoint(id, coordinatesXY[0], coordinatesXY[1], propertiesofInterestMap, 1, 1, trackID, new HashMap<String, Integer>());
-						
-						measurementsOfTrack.add(point);
-						
-					}
-				}
-			}
-		}
-    	
-    	trackMeasurementsAsPointsMap.put(trackID, measurementsOfTrack);
-    	
-	}
 	
 	private boolean createConnection() throws ClassNotFoundException {
 		Class.forName("org.postgresql.Driver");
@@ -753,8 +653,9 @@ public class PostgresPointService implements PointService {
 	}
 
 	private boolean executeStatement(String statement) {
+		Statement st = null;
 		try {
-			Statement st = conn.createStatement();
+			st = conn.createStatement();
 			st.execute(statement);
 
 			conn.commit();
@@ -763,16 +664,21 @@ public class PostgresPointService implements PointService {
 			LOGGER.error("Execution of the following statement failed: "
 					+ statement + " cause: " + e.getMessage());
 			return false;
+		} finally {
+			try {
+				conn.commit();
+			} catch (SQLException e) {
+				LOGGER.warn(e.getMessage(), e);
+			}
 		}
 		return true;
 	}
 
 	private ResultSet executeQueryStatement(String statement) {
+		Statement st = null;
 		try {
-			Statement st = conn.createStatement();
+			st = conn.createStatement();
 			ResultSet resultSet = st.executeQuery(statement);
-
-			conn.commit();
 
 			return resultSet;
 
@@ -780,20 +686,33 @@ public class PostgresPointService implements PointService {
 			LOGGER.error("Execution of the following statement failed: "
 					+ statement + " cause: " + e.getMessage());
 			return null;
+		} finally {
+			try {
+				conn.commit();
+			} catch (SQLException e) {
+				LOGGER.warn(e.getMessage(), e);
+			}
 		}
 	}
 
 	private boolean executeUpdateStatement(String statement) {
+		Statement st = null;
 		try {
-			Statement st = conn.createStatement();
+			st = conn.createStatement();
 			st.executeUpdate(statement);
 
 			conn.commit();
-
+			st.close();
 		} catch (SQLException e) {
 			LOGGER.error("Execution of the following statement failed: "
 					+ statement + " cause: " + e.getMessage());
 			return false;
+		} finally {
+			try {
+				conn.commit();
+			} catch (SQLException e) {
+				LOGGER.warn(e.getMessage(), e);
+			}
 		}
 		return true;
 	}
@@ -869,14 +788,34 @@ public class PostgresPointService implements PointService {
 		return statement;
 	}	
 	
-	private boolean insertTrackIntoAggregatedTracksTable(String trackID) {
-
+	public boolean insertTrackIntoAggregatedTracksTable(String trackID) {
+		if (trackAlreadyAggregated(trackID)) {
+			return false;
+		}
+		
 		String statement = "INSERT INTO " + aggregatedTracksTableName + "("
 				+ idField + ", " + aggregation_dateField + ") VALUES ('"
 				+ trackID + "', '" + iso8601DateFormat.format(new Date())
 				+ "');";
 
 		return executeUpdateStatement(statement);
+	}
+
+	@Override
+	public boolean trackAlreadyAggregated(String trackID) {
+		String alreadyThere = "SELECT * FROM "+ aggregatedTracksTableName
+				+" WHERE " + idField +" = '"+trackID+"'";
+		
+		ResultSet rs = executeQueryStatement(alreadyThere);
+		try {
+			if (rs.next()) {
+				return true;
+			}
+		} catch (SQLException e) {
+			LOGGER.warn(e.getMessage(), e);
+		}
+		
+		return false;
 	}
 	
 }

@@ -26,14 +26,31 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.conn.scheme.Scheme;
+import org.apache.http.conn.scheme.SchemeRegistry;
+import org.apache.http.conn.ssl.AllowAllHostnameVerifier;
+import org.apache.http.conn.ssl.SSLSocketFactory;
+import org.apache.http.conn.ssl.TrustStrategy;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.envirocar.analyse.entities.Point;
 import org.envirocar.analyse.properties.Properties;
+import org.envirocar.analyse.util.PointViaJsonMapIterator;
 import org.envirocar.analyse.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,7 +108,14 @@ public class AggregationAlgorithm {
 		pointService = new PostgresPointService(this.getBbox());
 	}
 	
-	public void runAlgorithm(Iterator<Point> newPoints) {
+	public void runAlgorithm(Iterator<Point> newPoints, String trackId) {
+		if (pointService.trackAlreadyAggregated(trackId)) {
+			LOGGER.info("Track already aggregated. skipping. "+trackId);
+			return;
+		}
+		
+		pointService.insertTrackIntoAggregatedTracksTable(trackId);
+		
 		Point nextPoint;
 		while (newPoints.hasNext()) {
 			nextPoint = newPoints.next();
@@ -133,7 +157,8 @@ public class AggregationAlgorithm {
 				 * aggregate values (avg, function should be
 				 * replaceable)
 				 */
-				pointService.aggregate(nextPoint, nearestNeighbor);
+				LOGGER.info("aggregating point: "+ nextPoint.getID());
+				pointService.aggregate(nextPoint, nearestNeighbor, trackId);
 
 //				pointList.add(aggregatedPoint);
 				
@@ -171,10 +196,11 @@ public class AggregationAlgorithm {
 //				}
 			}
 		}
+		
 	}
 	
 	
-	public void runAlgorithm(final String trackID){
+	public void runAlgorithm(final String trackID) throws IOException {
 		
 		LOGGER.debug("");
 		LOGGER.debug("");
@@ -188,42 +214,50 @@ public class AggregationAlgorithm {
 		LOGGER.debug("");
 		LOGGER.debug("");
 		LOGGER.debug("");		
+
+		HttpGet get = new HttpGet(Properties.getRequestTrackURL()+trackID);
 		
-		/*
-		 * PointService get measurements for track 
-		 */
+		HttpClient client;
+		try {
+			client = createClient();
+		} catch (KeyManagementException | UnrecoverableKeyException
+				| NoSuchAlgorithmException | KeyStoreException e) {
+			throw new IllegalStateException(e);
+		}
 		
-		pointService.getMeasurementsOfTrack(trackID);
-		
-		/*
-		 * run the algorithm with a wrapper using the to-be-removed
-		 * in-memory storage of the pointService
-		 */
-		runAlgorithm(new Iterator<Point>() {
+		HttpResponse resp = client.execute(get);
+		if (resp != null && resp.getEntity() != null
+				&& resp.getStatusLine() != null &&
+				resp.getStatusLine().getStatusCode() < HttpStatus.SC_MULTIPLE_CHOICES) {
 			
-			Point next = pointService.getNextPoint(trackID);
-
-			@Override
-			public boolean hasNext() {
-				return next != null;
-			}
-
-			@Override
-			public Point next() {
-				Point result = next;
-				next = pointService.getNextPoint(trackID);
-				return result;
-			}
-
-			@Override
-			public void remove() {
-				
-			}
-		});
+			PointViaJsonMapIterator it = new PointViaJsonMapIterator(
+					Utils.parseJsonStream(resp.getEntity().getContent()));
+			
+			runAlgorithm(it, trackID);
+		}
 		
 	}
 	
-	public void runAlgorithm(){
+	protected HttpClient createClient() throws IOException, KeyManagementException, UnrecoverableKeyException, NoSuchAlgorithmException, KeyStoreException {
+		DefaultHttpClient result = new DefaultHttpClient();
+		SchemeRegistry sr = result.getConnectionManager().getSchemeRegistry();
+
+		SSLSocketFactory sslsf = new SSLSocketFactory(new TrustStrategy() {
+
+			@Override
+			public boolean isTrusted(X509Certificate[] arg0, String arg1)
+					throws CertificateException {
+				return true;
+			}
+		}, new AllowAllHostnameVerifier());
+
+		Scheme httpsScheme2 = new Scheme("https", 443, sslsf);
+		sr.register(httpsScheme2);
+
+		return result;
+	}
+	
+	public void runAlgorithm() throws IOException{
 		
 		/*
 		 * get tracks
