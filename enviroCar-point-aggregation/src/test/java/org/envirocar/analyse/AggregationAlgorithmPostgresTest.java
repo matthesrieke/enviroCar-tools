@@ -36,7 +36,7 @@ public class AggregationAlgorithmPostgresTest {
 			.getLogger(AggregationAlgorithmPostgresTest.class);
 	
 //	@Test
-	public void testAlgorithm(){
+	public static void main(String[] args){
 		
 		double maxx = 7.6339;
 		double maxy = 51.96;
