@@ -39,5 +39,7 @@ public interface PointService {
 	List<Point> getResultSet();
 
 	boolean isFitForAggregation(Point nextPoint);
+
+	boolean trackAlreadyAggregated(String trackId);
 	
 }

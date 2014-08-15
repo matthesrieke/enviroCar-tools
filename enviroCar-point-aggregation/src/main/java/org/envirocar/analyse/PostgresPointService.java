@@ -655,8 +655,9 @@ public class PostgresPointService implements PointService {
 	}
 
 	private boolean executeStatement(String statement) {
+		Statement st = null;
 		try {
-			Statement st = conn.createStatement();
+			st = conn.createStatement();
 			st.execute(statement);
 
 			conn.commit();
@@ -665,16 +666,21 @@ public class PostgresPointService implements PointService {
 			LOGGER.error("Execution of the following statement failed: "
 					+ statement + " cause: " + e.getMessage());
 			return false;
+		} finally {
+			try {
+				conn.commit();
+			} catch (SQLException e) {
+				LOGGER.warn(e.getMessage(), e);
+			}
 		}
 		return true;
 	}
 
 	private ResultSet executeQueryStatement(String statement) {
+		Statement st = null;
 		try {
-			Statement st = conn.createStatement();
+			st = conn.createStatement();
 			ResultSet resultSet = st.executeQuery(statement);
-
-			conn.commit();
 
 			return resultSet;
 
@@ -682,20 +688,33 @@ public class PostgresPointService implements PointService {
 			LOGGER.error("Execution of the following statement failed: "
 					+ statement + " cause: " + e.getMessage());
 			return null;
+		} finally {
+			try {
+				conn.commit();
+			} catch (SQLException e) {
+				LOGGER.warn(e.getMessage(), e);
+			}
 		}
 	}
 
 	private boolean executeUpdateStatement(String statement) {
+		Statement st = null;
 		try {
-			Statement st = conn.createStatement();
+			st = conn.createStatement();
 			st.executeUpdate(statement);
 
 			conn.commit();
-
+			st.close();
 		} catch (SQLException e) {
 			LOGGER.error("Execution of the following statement failed: "
 					+ statement + " cause: " + e.getMessage());
 			return false;
+		} finally {
+			try {
+				conn.commit();
+			} catch (SQLException e) {
+				LOGGER.warn(e.getMessage(), e);
+			}
 		}
 		return true;
 	}
@@ -772,13 +791,33 @@ public class PostgresPointService implements PointService {
 	}	
 	
 	private boolean insertTrackIntoAggregatedTracksTable(String trackID) {
-
+		if (trackAlreadyAggregated(trackID)) {
+			return false;
+		}
+		
 		String statement = "INSERT INTO " + aggregatedTracksTableName + "("
 				+ idField + ", " + aggregation_dateField + ") VALUES ('"
 				+ trackID + "', '" + iso8601DateFormat.format(new Date())
 				+ "');";
 
 		return executeUpdateStatement(statement);
+	}
+
+	@Override
+	public boolean trackAlreadyAggregated(String trackID) {
+		String alreadyThere = "SELECT * FROM "+ aggregatedTracksTableName
+				+" WHERE " + idField +" = '"+trackID+"'";
+		
+		ResultSet rs = executeQueryStatement(alreadyThere);
+		try {
+			if (rs.next()) {
+				return true;
+			}
+		} catch (SQLException e) {
+			LOGGER.warn(e.getMessage(), e);
+		}
+		
+		return false;
 	}
 	
 }

@@ -89,7 +89,7 @@ public class ReceiveTracksServlet extends HttpServlet {
 		final String contentType = req.getHeader("Content-Type");
 		final InputStream stream = req.getInputStream();
 		
-		if (!"application/json".equals(contentType)) {
+		if (!(contentType != null && contentType.startsWith("application/json"))) {
 			throw new IllegalArgumentException("Invalid ContentType");
 		}
 		

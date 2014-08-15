@@ -26,6 +26,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -36,6 +42,11 @@ import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.conn.scheme.Scheme;
+import org.apache.http.conn.scheme.SchemeRegistry;
+import org.apache.http.conn.ssl.AllowAllHostnameVerifier;
+import org.apache.http.conn.ssl.SSLSocketFactory;
+import org.apache.http.conn.ssl.TrustStrategy;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.envirocar.analyse.entities.Point;
 import org.envirocar.analyse.properties.Properties;
@@ -98,6 +109,11 @@ public class AggregationAlgorithm {
 	}
 	
 	public void runAlgorithm(Iterator<Point> newPoints, String trackId) {
+		if (pointService.trackAlreadyAggregated(trackId)) {
+			LOGGER.info("Track already aggregated. skipping. "+trackId);
+			return;
+		}
+		
 		Point nextPoint;
 		while (newPoints.hasNext()) {
 			nextPoint = newPoints.next();
@@ -139,6 +155,7 @@ public class AggregationAlgorithm {
 				 * aggregate values (avg, function should be
 				 * replaceable)
 				 */
+				LOGGER.info("aggregating point: "+ nextPoint.getID());
 				pointService.aggregate(nextPoint, nearestNeighbor, trackId);
 
 //				pointList.add(aggregatedPoint);
@@ -180,7 +197,7 @@ public class AggregationAlgorithm {
 	}
 	
 	
-	public void runAlgorithm(final String trackID) throws IOException{
+	public void runAlgorithm(final String trackID) throws IOException {
 		
 		LOGGER.debug("");
 		LOGGER.debug("");
@@ -197,7 +214,14 @@ public class AggregationAlgorithm {
 
 		HttpGet get = new HttpGet(Properties.getRequestTrackURL()+trackID);
 		
-		HttpClient client = new DefaultHttpClient();
+		HttpClient client;
+		try {
+			client = createClient();
+		} catch (KeyManagementException | UnrecoverableKeyException
+				| NoSuchAlgorithmException | KeyStoreException e) {
+			throw new IllegalStateException(e);
+		}
+		
 		HttpResponse resp = client.execute(get);
 		if (resp != null && resp.getEntity() != null
 				&& resp.getStatusLine() != null &&
@@ -209,6 +233,25 @@ public class AggregationAlgorithm {
 			runAlgorithm(it, trackID);
 		}
 		
+	}
+	
+	protected HttpClient createClient() throws IOException, KeyManagementException, UnrecoverableKeyException, NoSuchAlgorithmException, KeyStoreException {
+		DefaultHttpClient result = new DefaultHttpClient();
+		SchemeRegistry sr = result.getConnectionManager().getSchemeRegistry();
+
+		SSLSocketFactory sslsf = new SSLSocketFactory(new TrustStrategy() {
+
+			@Override
+			public boolean isTrusted(X509Certificate[] arg0, String arg1)
+					throws CertificateException {
+				return true;
+			}
+		}, new AllowAllHostnameVerifier());
+
+		Scheme httpsScheme2 = new Scheme("https", 443, sslsf);
+		sr.register(httpsScheme2);
+
+		return result;
 	}
 	
 	public void runAlgorithm() throws IOException{
