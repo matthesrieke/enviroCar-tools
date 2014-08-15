@@ -32,7 +32,9 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -51,6 +53,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Geometry;
 
+/**
+ * <code>Pointservice</code> implementation using a Postgres database to store the aggregated measurements.
+ * 
+ * @author Benjamin Pross, Matthes Rieke
+ *
+ */
 public class PostgresPointService implements PointService {
 
 	private static final Logger LOGGER = LoggerFactory
@@ -63,10 +71,10 @@ public class PostgresPointService implements PointService {
 															
 	private String username;
 	private String password;
-	public static String aggregated_MeasurementsTableName = (String) Properties.getProperty("aggregated_MeasurementsTableName");// TODO
-	public static String original_MeasurementsTableName = (String) Properties.getProperty("original_MeasurementsTableName");// TODO from
-																				// properties
-	public static String measurementRelationsTableName = (String) Properties.getProperty("measurement_relationsTableName");// TODO from properties
+	public static String aggregated_MeasurementsTableName = (String) Properties.getProperty("aggregated_MeasurementsTableName");
+	public static String original_MeasurementsTableName = (String) Properties.getProperty("original_MeasurementsTableName");																				
+	public static String measurementRelationsTableName = (String) Properties.getProperty("measurement_relationsTableName");
+	public static String aggregatedTracksTableName = (String) Properties.getProperty("aggregatedTracksTableName");
 	
 	private String spatial_ref_sys = "4326";// TODO from properties
 	private String id_exp = "$id$";
@@ -98,8 +106,11 @@ public class PostgresPointService implements PointService {
 	private String geometryPlainTextField = "text_geom";
 	private String distField = "dist";
 	private String aggregated_measurement_idField = "aggregated_measurement_id";
+	private String aggregation_dateField = "aggregation_date";
 	
-	public final String pgCreationString = "CREATE TABLE "
+	private SimpleDateFormat iso8601DateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+	
+	private final String pgCreationString = "CREATE TABLE "
 			+ aggregated_MeasurementsTableName + " ("
 			+ idField + " VARCHAR(24) NOT NULL PRIMARY KEY, "
 			+ generalNumberOfContributingPointsField + " INTEGER, "
@@ -110,43 +121,33 @@ public class PostgresPointService implements PointService {
 			+ speedField + " DOUBLE PRECISION, " 
 			+ speedNumberOfContributingPointsField + " INTEGER)";
 	
-	public final String pgOriginalMeasurementsTableCreationString = "CREATE TABLE "
-			+ original_MeasurementsTableName + " ("
-			+ "ID VARCHAR(24) NOT NULL PRIMARY KEY, "
-			+ "TRACKID VARCHAR(24)," + "CO2 DOUBLE PRECISION,"
-			+ "SPEED DOUBLE PRECISION)";
-	
-	public final String pgMeasurementRelationsTableCreationString = "CREATE TABLE "
+	private final String pgMeasurementRelationsTableCreationString = "CREATE TABLE "
 			+ measurementRelationsTableName + " ("
 			+ idField + " VARCHAR(24) NOT NULL PRIMARY KEY, "
 			+ aggregated_measurement_idField + " VARCHAR(24), "
 			+ "CONSTRAINT measurement_relations_aggregated_measurement_id_fkey FOREIGN KEY (" + aggregated_measurement_idField + ") "
 			+ "REFERENCES " + aggregated_MeasurementsTableName + " (" + idField + ") MATCH SIMPLE "
 			+ "ON UPDATE NO ACTION ON DELETE NO ACTION)";
-
-	public String pgNearestNeighborCreationString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(w.the_geom,h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h, "
-			+ "(select * from " + original_MeasurementsTableName + " where " + idField + "='"
-			+ id_exp
-			+ "') w "
-			+ "where ST_DWithin(w." + geometryEncodedField + ",h." + geometryEncodedField + ","
-			+ distance_exp + ") " + "order by " + distField + " ASC;";
 	
-	public String pgNearestNeighborCreationString2 = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(" + geomFromText_exp + ",h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h "
+	private final String pgAggregatedTracksTableCreationString = "CREATE TABLE "
+			+ aggregatedTracksTableName + " ("
+			+ idField + " VARCHAR(24) NOT NULL PRIMARY KEY, "
+			+ aggregation_dateField + " timestamp with time zone)";
+	
+	private String pgNearestNeighborCreationString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(" + geomFromText_exp + ",h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h "
 			+ "where ST_DWithin(" + geomFromText_exp + ",h." + geometryEncodedField + ","
 			+ distance_exp + ") " + "order by " + distField + " ASC;";
 
-	public final String addGeometryColumnToTableString = "SELECT AddGeometryColumn( '"
+	private final String addGeometryColumnToTableString = "SELECT AddGeometryColumn( '"
 			+ table_name_exp
 			+ "', '" + geometryEncodedField + "', " + spatial_ref_sys + ", 'POINT', 2 );";
 	
-	public final String selectAllMeasurementsofTrackQueryString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + trackIDField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + " from " + original_MeasurementsTableName + " h where h." + trackIDField + " = ";
+	private final String selectAllAggregatedMeasurementsString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + " from " + aggregated_MeasurementsTableName + " h; ";
 	
-	public final String selectAllAggregatedMeasurementsString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + " from " + aggregated_MeasurementsTableName + " h; ";
+	private final String deletePointFromTableString = "delete from " + table_name_exp + " where " + idField + "=";
 	
-	public final String deletePointFromTableString = "delete from " + table_name_exp + " where " + idField + "=";
+	private final String updateAggregatedMeasurementString = "UPDATE " + aggregated_MeasurementsTableName + " SET " + speedField + " = " + speed_value_exp + ", " + speedNumberOfContributingPointsField + " = " + speedNumberOfContributingPoints_value_exp + ", " + co2Field + " = " + co2_value_exp + ", " + co2NumberOfContributingPointsField + " = " + co2NumberOfContributingPoints_value_exp + ", " + generalNumberOfContributingPointsField + " = " + generalNumberOfContributingPoints_value_exp + ", " + generalnumberOfContributingTracksField + " = " + generalnumberOfContributingTracks_value_exp + ", " + lastContributingTrackField + " = '" + lastContributingTrack_value_exp + "', " + geometryEncodedField + " = " + geometryEncoded_value_exp + " WHERE " + idField + " = '" + id_exp + "';";
 	
-	public final String updateAggregatedMeasurementString = "UPDATE " + aggregated_MeasurementsTableName + " SET " + speedField + " = " + speed_value_exp + ", " + speedNumberOfContributingPointsField + " = " + speedNumberOfContributingPoints_value_exp + ", " + co2Field + " = " + co2_value_exp + ", " + co2NumberOfContributingPointsField + " = " + co2NumberOfContributingPoints_value_exp + ", " + generalNumberOfContributingPointsField + " = " + generalNumberOfContributingPoints_value_exp + ", " + generalnumberOfContributingTracksField + " = " + generalnumberOfContributingTracks_value_exp + ", " + lastContributingTrackField + " = '" + lastContributingTrack_value_exp + "', " + geometryEncodedField + " = " + geometryEncoded_value_exp + " WHERE " + idField + " = '" + id_exp + "';";
-
 	private Geometry bbox;
 	
 	public PostgresPointService() {
@@ -163,7 +164,8 @@ public class PostgresPointService implements PointService {
 			throw new IllegalStateException(e);
 		}
 		createTable(pgCreationString, aggregated_MeasurementsTableName, true);
-		createTable(pgMeasurementRelationsTableCreationString, measurementRelationsTableName, false);
+		createTable(pgMeasurementRelationsTableCreationString, measurementRelationsTableName, false);		
+		createTable(pgAggregatedTracksTableCreationString, aggregatedTracksTableName, false);
 	}
 
 	@Override
@@ -215,12 +217,14 @@ public class PostgresPointService implements PointService {
 			LOGGER.error("Error getting measurements of track:" + trackID, e);
 		}
 		
+		insertTrackIntoAggregatedTracksTable(trackID);
+		
 	}
 
 	@Override
 	public Point getNearestNeighbor(Point point, double distance) {
 
-		String queryString = pgNearestNeighborCreationString2.replace(distance_exp, "" + distance).replace(geomFromText_exp, createST_GeometryFromTextStatement(point.getX(), point.getY()));
+		String queryString = pgNearestNeighborCreationString.replace(distance_exp, "" + distance).replace(geomFromText_exp, createST_GeometryFromTextStatement(point.getX(), point.getY()));
 
 		ResultSet resultSet = executeQueryStatement(queryString);
 
@@ -341,11 +345,6 @@ public class PostgresPointService implements PointService {
 		Point aggregatedPoint = new InMemoryPoint(point);
 		
 		updateValues(aggregatedPoint, nearestNeighborPoint);
-		
-		/*
-		 * TODO do not re-new id every time
-		 */
-//		aggregatedPoint.setID(new ObjectId().toString());
 		
 		/*
 		 * distance weighting
@@ -869,5 +868,15 @@ public class PostgresPointService implements PointService {
 
 		return statement;
 	}	
+	
+	private boolean insertTrackIntoAggregatedTracksTable(String trackID) {
+
+		String statement = "INSERT INTO " + aggregatedTracksTableName + "("
+				+ idField + ", " + aggregation_dateField + ") VALUES ('"
+				+ trackID + "', '" + iso8601DateFormat.format(new Date())
+				+ "');";
+
+		return executeUpdateStatement(statement);
+	}
 	
 }
