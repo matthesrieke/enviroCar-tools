@@ -28,11 +28,7 @@ import org.envirocar.analyse.entities.Point;
 
 public interface PointService {
 	
-	Point aggregate(Point point, Point aggregationPoint);
-
-	Point getNextPoint(String trackID);
-
-	void getMeasurementsOfTrack(String trackID);
+	Point aggregate(Point point, Point aggregationPoint, String trackId);
 
 	Point getNearestNeighbor(Point point, double distance);
 

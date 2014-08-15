@@ -22,6 +22,8 @@
  */
 package org.envirocar.analyse.util;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,6 +33,7 @@ import org.envirocar.analyse.properties.Properties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vividsolutions.jts.geom.GeometryFactory;
 
 public class Utils {
@@ -95,5 +98,11 @@ public class Utils {
 		return result;
 		
 	}
+    
+    public static Map<?, ?> parseJsonStream(InputStream stream) throws IOException {
+		ObjectMapper om = new ObjectMapper();
+		final Map<?, ?> json = om.readValue(stream, Map.class);
+		return json;
+    }
 	
 }

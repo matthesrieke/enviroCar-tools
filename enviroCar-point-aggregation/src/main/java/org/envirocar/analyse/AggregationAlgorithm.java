@@ -32,8 +32,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.envirocar.analyse.entities.Point;
 import org.envirocar.analyse.properties.Properties;
+import org.envirocar.analyse.util.PointViaJsonMapIterator;
 import org.envirocar.analyse.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,7 +97,7 @@ public class AggregationAlgorithm {
 		pointService = new PostgresPointService(this.getBbox());
 	}
 	
-	public void runAlgorithm(Iterator<Point> newPoints) {
+	public void runAlgorithm(Iterator<Point> newPoints, String trackId) {
 		Point nextPoint;
 		while (newPoints.hasNext()) {
 			nextPoint = newPoints.next();
@@ -133,7 +139,7 @@ public class AggregationAlgorithm {
 				 * aggregate values (avg, function should be
 				 * replaceable)
 				 */
-				pointService.aggregate(nextPoint, nearestNeighbor);
+				pointService.aggregate(nextPoint, nearestNeighbor, trackId);
 
 //				pointList.add(aggregatedPoint);
 				
@@ -174,7 +180,7 @@ public class AggregationAlgorithm {
 	}
 	
 	
-	public void runAlgorithm(final String trackID){
+	public void runAlgorithm(final String trackID) throws IOException{
 		
 		LOGGER.debug("");
 		LOGGER.debug("");
@@ -188,42 +194,24 @@ public class AggregationAlgorithm {
 		LOGGER.debug("");
 		LOGGER.debug("");
 		LOGGER.debug("");		
+
+		HttpGet get = new HttpGet(Properties.getRequestTrackURL()+trackID);
 		
-		/*
-		 * PointService get measurements for track 
-		 */
-		
-		pointService.getMeasurementsOfTrack(trackID);
-		
-		/*
-		 * run the algorithm with a wrapper using the to-be-removed
-		 * in-memory storage of the pointService
-		 */
-		runAlgorithm(new Iterator<Point>() {
+		HttpClient client = new DefaultHttpClient();
+		HttpResponse resp = client.execute(get);
+		if (resp != null && resp.getEntity() != null
+				&& resp.getStatusLine() != null &&
+				resp.getStatusLine().getStatusCode() < HttpStatus.SC_MULTIPLE_CHOICES) {
 			
-			Point next = pointService.getNextPoint(trackID);
-
-			@Override
-			public boolean hasNext() {
-				return next != null;
-			}
-
-			@Override
-			public Point next() {
-				Point result = next;
-				next = pointService.getNextPoint(trackID);
-				return result;
-			}
-
-			@Override
-			public void remove() {
-				
-			}
-		});
+			PointViaJsonMapIterator it = new PointViaJsonMapIterator(
+					Utils.parseJsonStream(resp.getEntity().getContent()));
+			
+			runAlgorithm(it, trackID);
+		}
 		
 	}
 	
-	public void runAlgorithm(){
+	public void runAlgorithm() throws IOException{
 		
 		/*
 		 * get tracks
