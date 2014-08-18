@@ -104,7 +104,7 @@ public class PostgresPointService implements PointService {
 	
 	private final String pgCreationString = "CREATE TABLE "
 			+ aggregated_MeasurementsTableName + " ("
-			+ idField + " INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+			+ idField + " SERIAL PRIMARY KEY, "
 			+ generalNumberOfContributingPointsField + " INTEGER, "
 			+ generalnumberOfContributingTracksField + " INTEGER,"
 			+ lastContributingTrackField + " VARCHAR(24)," 
@@ -115,8 +115,8 @@ public class PostgresPointService implements PointService {
 	
 	private final String pgMeasurementRelationsTableCreationString = "CREATE TABLE "
 			+ measurementRelationsTableName + " ("
-			+ idField + " INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
-			+ aggregated_measurement_idField + " VARCHAR(24), "
+			+ idField + " VARCHAR(24) NOT NULL PRIMARY KEY, "
+			+ aggregated_measurement_idField + " INTEGER, "
 			+ "CONSTRAINT measurement_relations_aggregated_measurement_id_fkey FOREIGN KEY (" + aggregated_measurement_idField + ") "
 			+ "REFERENCES " + aggregated_MeasurementsTableName + " (" + idField + ") MATCH SIMPLE "
 			+ "ON UPDATE NO ACTION ON DELETE NO ACTION)";
@@ -618,10 +618,7 @@ public class PostgresPointService implements PointService {
 					.getTables(null, null, tableName, new String[] { "TABLE" });
 			if (!rs.next()) {
 				LOGGER.info("Table " + tableName + " does not yet exist.");
-				Statement st = conn.createStatement();
-				st.executeUpdate(creationString);
-
-				conn.commit();
+				executeUpdateStatement(creationString);
 
 				meta = conn.getMetaData();
 
@@ -748,7 +745,9 @@ public class PostgresPointService implements PointService {
 //				point.getNumberOfTracksUsedForAggregation() + ", '" +
 //				point.getLastContributingTrack() + "', ";
 		
-		values.add("ST_GeomFromText('POINT(" + point.getX() + " " + point.getY() + ")', " + spatial_ref_sys + ")");
+//		values.add(point.getX());
+//		values.add(point.getY());
+//		values.add(spatial_ref_sys);
 		values.add(new Integer(point.getNumberOfPointsUsedForAggregation()));
 		values.add(new Integer(point.getNumberOfTracksUsedForAggregation()));
 		values.add(point.getLastContributingTrack());
@@ -780,7 +779,7 @@ public class PostgresPointService implements PointService {
 		}
 		
 		StringBuilder sb = new StringBuilder();
-		sb.append("(");
+		sb.append("(ST_GeomFromText('POINT("+point.getX()+" "+point.getY()+")', "+spatial_ref_sys+"),");
 		for (int i = 0; i < values.size(); i++) {
 			sb.append("?,");
 		}
@@ -792,7 +791,7 @@ public class PostgresPointService implements PointService {
 		
 		PreparedStatement result = conn.prepareStatement(statement, PreparedStatement.RETURN_GENERATED_KEYS);
 
-		int index = 0;
+		int index = 1;
 		for (Object object : values) {
 			if (object instanceof String) {
 				result.setString(index++, object.toString());
