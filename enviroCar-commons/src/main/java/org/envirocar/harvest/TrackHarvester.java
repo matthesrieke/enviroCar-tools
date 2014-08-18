@@ -126,7 +126,7 @@ public class TrackHarvester extends TrackPublisher {
 		return progress;
 	}
 
-	private void readAndPushTrack(String id)
+	public void readAndPushTrack(String id)
 			throws ClientProtocolException, IOException {
 		HttpClient client = createClient();
 		HttpResponse resp = client.execute(new HttpGet(baseTracks.concat(id)));
