@@ -25,6 +25,7 @@ package org.envirocar.analyse;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -36,7 +37,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.bson.types.ObjectId;
 import org.envirocar.analyse.entities.InMemoryPoint;
 import org.envirocar.analyse.entities.Point;
 import org.envirocar.analyse.properties.Properties;
@@ -104,7 +104,7 @@ public class PostgresPointService implements PointService {
 	
 	private final String pgCreationString = "CREATE TABLE "
 			+ aggregated_MeasurementsTableName + " ("
-			+ idField + " VARCHAR(24) NOT NULL PRIMARY KEY, "
+			+ idField + " INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
 			+ generalNumberOfContributingPointsField + " INTEGER, "
 			+ generalnumberOfContributingTracksField + " INTEGER,"
 			+ lastContributingTrackField + " VARCHAR(24)," 
@@ -115,7 +115,7 @@ public class PostgresPointService implements PointService {
 	
 	private final String pgMeasurementRelationsTableCreationString = "CREATE TABLE "
 			+ measurementRelationsTableName + " ("
-			+ idField + " VARCHAR(24) NOT NULL PRIMARY KEY, "
+			+ idField + " INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
 			+ aggregated_measurement_idField + " VARCHAR(24), "
 			+ "CONSTRAINT measurement_relations_aggregated_measurement_id_fkey FOREIGN KEY (" + aggregated_measurement_idField + ") "
 			+ "REFERENCES " + aggregated_MeasurementsTableName + " (" + idField + ") MATCH SIMPLE "
@@ -173,7 +173,7 @@ public class PostgresPointService implements PointService {
 
 				while (resultSet.next()) {
 
-					String resultID = resultSet.getString(idField);
+					String resultID = Integer.toString(resultSet.getInt(idField));
 
 					Map<String, Object> propertyMap = new HashMap<>();
 					
@@ -307,7 +307,7 @@ public class PostgresPointService implements PointService {
 		LOGGER.debug("Aggregated: " + aggregatedPoint.getID() + " and " + nearestNeighborPoint.getID());
 		LOGGER.debug("NumberOfPoints " + aggregatedPoint.getNumberOfPointsUsedForAggregation());
 		
-		insertMeasurementRelation(point.getID(), nearestNeighborPoint.getID());
+		insertMeasurementRelation(point.getID(), Integer.parseInt(nearestNeighborPoint.getID()));
 		
 		/*
 		 * store result in DB
@@ -353,19 +353,17 @@ public class PostgresPointService implements PointService {
 	}
 
 	@Override
-	public void addToResultSet(Point newPoint, boolean allocateNewID) {
+	public void addToResultSet(Point newPoint) {
 		
-		String oldID = newPoint.getID();
-		
-		if(allocateNewID){
-			newPoint.setID(new ObjectId().toString());
+		int newId;
+		try {
+			newId = insertPoint(newPoint);
+		} catch (SQLException e) {
+			LOGGER.warn(e.getMessage(), e);
+			return;
 		}
 		
-		insertPoint(newPoint, false);
-		
-		if(allocateNewID){
-			insertMeasurementRelation(oldID, newPoint.getID());
-		}
+		insertMeasurementRelation(newPoint.getID(), newId);
 	}
 	
 	private String createST_GeometryFromTextStatement(double x, double y){
@@ -374,10 +372,10 @@ public class PostgresPointService implements PointService {
 				+ " " + y + ")', " + spatial_ref_sys + ")";		
 	}
 	
-	private boolean insertMeasurementRelation(String originalID, String aggregatedID){
+	private boolean insertMeasurementRelation(String originalID, int aggregatedID){
 	
 		String statement = "INSERT INTO " + measurementRelationsTableName
-				+ "(" + idField + ", " + aggregated_measurement_idField + ") VALUES ('"  + originalID + "', '" + aggregatedID + "');";
+				+ "(" + idField + ", " + aggregated_measurement_idField + ") VALUES ('"  + originalID + "', " + aggregatedID + ");";
 		
 		return executeUpdateStatement(statement);
 	}
@@ -658,8 +656,6 @@ public class PostgresPointService implements PointService {
 			st = conn.createStatement();
 			st.execute(statement);
 
-			conn.commit();
-
 		} catch (SQLException e) {
 			LOGGER.error("Execution of the following statement failed: "
 					+ statement + " cause: " + e.getMessage());
@@ -700,9 +696,7 @@ public class PostgresPointService implements PointService {
 		try {
 			st = conn.createStatement();
 			st.executeUpdate(statement);
-
-			conn.commit();
-			st.close();
+			
 		} catch (SQLException e) {
 			LOGGER.error("Execution of the following statement failed: "
 					+ statement + " cause: " + e.getMessage());
@@ -710,6 +704,7 @@ public class PostgresPointService implements PointService {
 		} finally {
 			try {
 				conn.commit();
+				st.close();
 			} catch (SQLException e) {
 				LOGGER.warn(e.getMessage(), e);
 			}
@@ -717,37 +712,46 @@ public class PostgresPointService implements PointService {
 		return true;
 	}
 
-	private boolean insertPoint(Point point,  boolean checkIfExists) {
+	private int insertPoint(Point point) throws SQLException {
+		PreparedStatement statement = createInsertPointStatement(point);
+		int affectedRows = statement.executeUpdate();
 
-		if(checkIfExists){
-			String statement = "select * from " + aggregated_MeasurementsTableName + " where "+ idField +"='" + point.getID() + "';";
-			
-			ResultSet rs = executeQueryStatement(statement);
-			
-			try {
-				if(rs.next()){
-					return false;
-				}
-			} catch (SQLException e) {
-				LOGGER.error("Could not check if row with id=" + point.getID() + " and "+ trackIDField +"=" + point.getLastContributingTrack() + " exists.", e);
-				return false;
-			}
-		}
-		
-		String statement = createInsertPointStatement(point);
+        if (affectedRows == 0) {
+            throw new SQLException("Creating user failed, no rows affected.");
+        }
 
-		return executeUpdateStatement(statement);
+        try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
+            if (generatedKeys.next()) {
+               return generatedKeys.getInt(1);
+            }
+            else {
+                throw new SQLException("Creating user failed, no ID obtained.");
+            }
+        }
 	}
 	
-	private String createInsertPointStatement(Point point) {
 
-		String columnNameString = "( "+ idField +", "+ geometryEncodedField +", "+ generalNumberOfContributingPointsField +", "+ generalnumberOfContributingTracksField +", "+ lastContributingTrackField +", ";
-		String valueString = "( '" + point.getID() + "', ST_GeomFromText('POINT(" + point.getX()
-				+ " " + point.getY() + ")', " + spatial_ref_sys + "), " + point.getNumberOfPointsUsedForAggregation()
-				+ ", " + point.getNumberOfTracksUsedForAggregation() + ", '" + point.getLastContributingTrack() + "', ";
-
+	private PreparedStatement createInsertPointStatement(Point point) throws SQLException {
+		String columnNameString = "( "+
+			geometryEncodedField +", "+
+			generalNumberOfContributingPointsField +", "+
+			generalnumberOfContributingTracksField +", "+
+			lastContributingTrackField +", ";
+		
 		Iterator<String> propertyNameIterator = Properties
 				.getPropertiesOfInterestDatatypeMapping().keySet().iterator();
+		
+		List<Object> values = new ArrayList<>();
+		
+//		String valueString = "( ST_GeomFromText('POINT(" + point.getX() + " " + point.getY() + ")', " + spatial_ref_sys + "), " +
+//				point.getNumberOfPointsUsedForAggregation() + ", " +
+//				point.getNumberOfTracksUsedForAggregation() + ", '" +
+//				point.getLastContributingTrack() + "', ";
+		
+		values.add("ST_GeomFromText('POINT(" + point.getX() + " " + point.getY() + ")', " + spatial_ref_sys + ")");
+		values.add(new Integer(point.getNumberOfPointsUsedForAggregation()));
+		values.add(new Integer(point.getNumberOfTracksUsedForAggregation()));
+		values.add(point.getLastContributingTrack());
 
 		while (propertyNameIterator.hasNext()) {
 			String propertyName = (String) propertyNameIterator.next();
@@ -762,30 +766,46 @@ public class PostgresPointService implements PointService {
 			
 			Object o = point.getProperty(propertyName);
 			
-			valueString = valueString.concat(o == null? "" : String
-					.valueOf(o));
+			values.add(o == null? null : Double.parseDouble(o.toString()));
 			
-			valueString = valueString.concat(", ");
+			int v = point.getNumberOfPointsUsedForAggregation(propertyName);
 			
-			o = point.getNumberOfPointsUsedForAggregation(propertyName);
-			
-			valueString = valueString.concat(String
-					.valueOf(o == null? 0 : String
-							.valueOf(o)));
+			values.add(new Integer(v));
 
 			if (propertyNameIterator.hasNext()) {
 				columnNameString = columnNameString.concat(", ");
-				valueString = valueString.concat(", ");
 			} else {
 				columnNameString = columnNameString.concat(")");
-				valueString = valueString.concat(")");
 			}
 		}
-
+		
+		StringBuilder sb = new StringBuilder();
+		sb.append("(");
+		for (int i = 0; i < values.size(); i++) {
+			sb.append("?,");
+		}
+		sb.delete(sb.length()-1, sb.length());
+		sb.append(")");
+		
 		String statement = "INSERT INTO " + aggregated_MeasurementsTableName
-				+ columnNameString + "VALUES" + valueString + ";";
+				+ columnNameString + "VALUES" + sb.toString() + ";";
+		
+		PreparedStatement result = conn.prepareStatement(statement, PreparedStatement.RETURN_GENERATED_KEYS);
 
-		return statement;
+		int index = 0;
+		for (Object object : values) {
+			if (object instanceof String) {
+				result.setString(index++, object.toString());
+			}
+			else if (object instanceof Integer) {
+				result.setInt(index++, (int) object);
+			}
+			else if (object instanceof Double) {
+				result.setDouble(index++, (double) object);
+			}
+		}
+		
+		return result;
 	}	
 	
 	public boolean insertTrackIntoAggregatedTracksTable(String trackID) {

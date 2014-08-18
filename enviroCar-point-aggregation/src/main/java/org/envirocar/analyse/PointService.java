@@ -32,7 +32,7 @@ public interface PointService {
 
 	Point getNearestNeighbor(Point point, double distance);
 
-	void addToResultSet(Point newPoint, boolean allocateNewID);
+	void addToResultSet(Point newPoint);
 	
 	boolean updateResultSet(String idOfPointToBeReplaced, Point replacementPoint);
 
