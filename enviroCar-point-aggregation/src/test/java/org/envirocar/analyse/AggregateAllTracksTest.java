@@ -48,7 +48,12 @@ public class AggregateAllTracksTest {
 			@Override
 			public void readAndPushTrack(String id)
 					throws ClientProtocolException, IOException {
-				algo.runAlgorithm(id);
+				try {
+					algo.runAlgorithm(id);
+				} 
+				catch (IOException e) {
+					logger.warn(e.getMessage(), e);
+				}
 			}
 		};
 		
