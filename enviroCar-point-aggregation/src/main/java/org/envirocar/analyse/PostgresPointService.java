@@ -58,6 +58,8 @@ public class PostgresPointService implements PointService {
 	private static final Logger LOGGER = LoggerFactory
 			.getLogger(PostgresPointService.class);
 
+	private static final String CONTRIBUTING_COUNT_SUFFIX = "_contributing_count";
+
 	private Connection conn = null;
 	private String connectionURL = null;
 	private String databaseName;
@@ -86,13 +88,13 @@ public class PostgresPointService implements PointService {
 	private final String geometryEncoded_value_exp = "$geometryEncoded_value$";
 
 	private String idField = "id";
-	private String generalNumberOfContributingPointsField = "generalnumberofcontributingpoints";
-	private String generalnumberOfContributingTracksField = "generalnumberofcontributingtracks";
+	private String contribPointCountField = "contributing_point_count";
+	private String contribTrackCountField = "contributing_track_count";
 	private String lastContributingTrackField = "lastcontributingtrack";
 	private String co2Field = "co2";
 	private String speedField = "speed";
-	private String co2NumberOfContributingPointsField = "co2numberofcontributingpoints";
-	private String speedNumberOfContributingPointsField = "speednumberofcontributingpoints";
+	private String co2NumberOfContributingPointsField = co2Field+CONTRIBUTING_COUNT_SUFFIX;
+	private String speedNumberOfContributingPointsField = speedField+CONTRIBUTING_COUNT_SUFFIX;
 	private String trackIDField = "trackid";
 	private String geometryEncodedField = "the_geom";
 	private String geometryPlainTextField = "text_geom";
@@ -105,8 +107,8 @@ public class PostgresPointService implements PointService {
 	private final String pgCreationString = "CREATE TABLE "
 			+ aggregated_MeasurementsTableName + " ("
 			+ idField + " SERIAL PRIMARY KEY, "
-			+ generalNumberOfContributingPointsField + " INTEGER, "
-			+ generalnumberOfContributingTracksField + " INTEGER,"
+			+ contribPointCountField + " INTEGER, "
+			+ contribTrackCountField + " INTEGER,"
 			+ lastContributingTrackField + " VARCHAR(24)," 
 			+ co2Field + " DOUBLE PRECISION," 
 			+ co2NumberOfContributingPointsField + " INTEGER, "
@@ -126,7 +128,7 @@ public class PostgresPointService implements PointService {
 			+ idField + " VARCHAR(24) NOT NULL PRIMARY KEY, "
 			+ aggregation_dateField + " timestamp with time zone)";
 	
-	private String pgNearestNeighborCreationString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(" + geomFromText_exp + ",h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h "
+	private String pgNearestNeighborCreationString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + contribPointCountField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + contribTrackCountField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(" + geomFromText_exp + ",h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h "
 			+ "where ST_DWithin(" + geomFromText_exp + ",h." + geometryEncodedField + ","
 			+ distance_exp + ") " + "order by " + distField + " ASC;";
 
@@ -134,11 +136,11 @@ public class PostgresPointService implements PointService {
 			+ table_name_exp
 			+ "', '" + geometryEncodedField + "', " + spatial_ref_sys + ", 'POINT', 2 );";
 	
-	private final String selectAllAggregatedMeasurementsString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + " from " + aggregated_MeasurementsTableName + " h; ";
+	private final String selectAllAggregatedMeasurementsString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + contribPointCountField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + contribTrackCountField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + " from " + aggregated_MeasurementsTableName + " h; ";
 	
 	private final String deletePointFromTableString = "delete from " + table_name_exp + " where " + idField + "=";
 	
-	private final String updateAggregatedMeasurementString = "UPDATE " + aggregated_MeasurementsTableName + " SET " + speedField + " = " + speed_value_exp + ", " + speedNumberOfContributingPointsField + " = " + speedNumberOfContributingPoints_value_exp + ", " + co2Field + " = " + co2_value_exp + ", " + co2NumberOfContributingPointsField + " = " + co2NumberOfContributingPoints_value_exp + ", " + generalNumberOfContributingPointsField + " = " + generalNumberOfContributingPoints_value_exp + ", " + generalnumberOfContributingTracksField + " = " + generalnumberOfContributingTracks_value_exp + ", " + lastContributingTrackField + " = '" + lastContributingTrack_value_exp + "', " + geometryEncodedField + " = " + geometryEncoded_value_exp + " WHERE " + idField + " = '" + id_exp + "';";
+	private final String updateAggregatedMeasurementString = "UPDATE " + aggregated_MeasurementsTableName + " SET " + speedField + " = " + speed_value_exp + ", " + speedNumberOfContributingPointsField + " = " + speedNumberOfContributingPoints_value_exp + ", " + co2Field + " = " + co2_value_exp + ", " + co2NumberOfContributingPointsField + " = " + co2NumberOfContributingPoints_value_exp + ", " + contribPointCountField + " = " + generalNumberOfContributingPoints_value_exp + ", " + contribTrackCountField + " = " + generalnumberOfContributingTracks_value_exp + ", " + lastContributingTrackField + " = '" + lastContributingTrack_value_exp + "', " + geometryEncodedField + " = " + geometryEncoded_value_exp + " WHERE " + idField + " = '" + id_exp + "';";
 	
 	private Geometry bbox;
 	
@@ -196,7 +198,7 @@ public class PostgresPointService implements PointService {
 						propertyMap.put(propertyName, value);
 						
 						int pointsUsedForAggregation = resultSet.getInt(propertyName
-									.toLowerCase() + "numberofcontributingpoints");
+									.toLowerCase() + CONTRIBUTING_COUNT_SUFFIX);
 								
 						propertyPointsUsedForAggregationMap.put(propertyName, pointsUsedForAggregation);
 						
@@ -206,10 +208,10 @@ public class PostgresPointService implements PointService {
 							.getString(lastContributingTrackField);
 
 					int resultNumberOfContributingPoints = resultSet
-							.getInt(generalNumberOfContributingPointsField);
+							.getInt(contribPointCountField);
 
 					int resultNumberOfContributingTracks = resultSet
-							.getInt(generalnumberOfContributingTracksField);
+							.getInt(contribTrackCountField);
 
 					String resultGeomAsText = resultSet.getString(geometryPlainTextField);
 
@@ -518,11 +520,11 @@ public class PostgresPointService implements PointService {
 			try{
 			
 			int pointsUsedForAggregation = resultSet.getInt(propertyName
-						.toLowerCase() + "numberofcontributingpoints");
+						.toLowerCase() + CONTRIBUTING_COUNT_SUFFIX);
 					
 			propertyPointsUsedForAggregationMap.put(propertyName, pointsUsedForAggregation);
 			}catch(Exception e){
-				LOGGER.info("Column " + propertyName.toLowerCase() + "numberofcontributingpoints" + " not available.");
+				LOGGER.info("Column " + propertyName.toLowerCase() + CONTRIBUTING_COUNT_SUFFIX + " not available.");
 				LOGGER.info(e.getMessage());
 			}
 			
@@ -540,18 +542,18 @@ public class PostgresPointService implements PointService {
 		int resultNumberOfContributingPoints = 1;
 		
 		try {			
-			resultNumberOfContributingPoints = resultSet.getInt(generalNumberOfContributingPointsField);
+			resultNumberOfContributingPoints = resultSet.getInt(contribPointCountField);
 		} catch (SQLException e) {
-			LOGGER.info("Column " + generalNumberOfContributingPointsField + " not available. Defaulting to 1.");
+			LOGGER.info("Column " + contribPointCountField + " not available. Defaulting to 1.");
 			LOGGER.info(e.getMessage());
 		}
 		
 		int resultNumberOfContributingTracks = 1;
 		
 		try {			
-			resultNumberOfContributingTracks = resultSet.getInt(generalnumberOfContributingTracksField);			
+			resultNumberOfContributingTracks = resultSet.getInt(contribTrackCountField);			
 		} catch (SQLException e) {
-			LOGGER.info("Column " + generalnumberOfContributingTracksField + " not available. Defaulting to 1.");
+			LOGGER.info("Column " + contribTrackCountField + " not available. Defaulting to 1.");
 			LOGGER.info(e.getMessage());
 		}
 		
@@ -731,8 +733,8 @@ public class PostgresPointService implements PointService {
 	private PreparedStatement createInsertPointStatement(Point point) throws SQLException {
 		String columnNameString = "( "+
 			geometryEncodedField +", "+
-			generalNumberOfContributingPointsField +", "+
-			generalnumberOfContributingTracksField +", "+
+			contribPointCountField +", "+
+			contribTrackCountField +", "+
 			lastContributingTrackField +", ";
 		
 		Iterator<String> propertyNameIterator = Properties
@@ -761,7 +763,7 @@ public class PostgresPointService implements PointService {
 			columnNameString = columnNameString.concat(", ");
 			
 			columnNameString = columnNameString.concat(propertyName
-					.toLowerCase() + "numberofcontributingpoints");
+					.toLowerCase() + CONTRIBUTING_COUNT_SUFFIX);
 			
 			Object o = point.getProperty(propertyName);
 			

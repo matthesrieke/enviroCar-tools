@@ -185,8 +185,13 @@ public class AggregationAlgorithm {
 		LOGGER.debug("");
 		LOGGER.debug("");
 		LOGGER.debug("");
-		LOGGER.debug("");		
+		LOGGER.debug("");
 
+		if (pointService.trackAlreadyAggregated(trackID)) {
+			LOGGER.info("Track already aggregated. skipping. "+trackID);
+			return;
+		}
+		
 		HttpGet get = new HttpGet(Properties.getRequestTrackURL()+trackID);
 		
 		HttpClient client;
