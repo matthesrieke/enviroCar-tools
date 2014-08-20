@@ -22,13 +22,10 @@
  */
 package org.envirocar.analyse;
 
-import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -39,6 +36,7 @@ import java.util.Map;
 
 import org.envirocar.analyse.entities.InMemoryPoint;
 import org.envirocar.analyse.entities.Point;
+import org.envirocar.analyse.postgres.PostgresConnection;
 import org.envirocar.analyse.properties.Properties;
 import org.envirocar.analyse.util.Utils;
 import org.slf4j.Logger;
@@ -60,13 +58,8 @@ public class PostgresPointService implements PointService {
 
 	private static final String CONTRIBUTING_COUNT_SUFFIX = "_contributing_count";
 
-	private Connection conn = null;
-	private String connectionURL = null;
-	private String databaseName;
-	private String databasePath;
-															
-	private String username;
-	private String password;
+	private PostgresConnection connection = null;
+
 	public static String aggregated_MeasurementsTableName = (String) Properties.getProperty("aggregated_MeasurementsTableName");
 	public static String original_MeasurementsTableName = (String) Properties.getProperty("original_MeasurementsTableName");																				
 	public static String measurementRelationsTableName = (String) Properties.getProperty("measurement_relationsTableName");
@@ -151,11 +144,8 @@ public class PostgresPointService implements PointService {
 	public PostgresPointService(Geometry bbox) {
 		this.bbox = bbox;
 		
-		try {
-			createConnection();
-		} catch (ClassNotFoundException e) {
-			throw new IllegalStateException(e);
-		}
+		this.connection = new PostgresConnection();
+		
 		createTable(pgCreationString, aggregated_MeasurementsTableName, true);
 		createTable(pgMeasurementRelationsTableCreationString, measurementRelationsTableName, false);		
 		createTable(pgAggregatedTracksTableCreationString, aggregatedTracksTableName, false);
@@ -167,7 +157,7 @@ public class PostgresPointService implements PointService {
 
 		String queryString = pgNearestNeighborCreationString.replace(distance_exp, "" + distance).replace(geomFromText_exp, createST_GeometryFromTextStatement(point.getX(), point.getY()));
 
-		ResultSet resultSet = executeQueryStatement(queryString);
+		ResultSet resultSet = this.connection.executeQueryStatement(queryString);
 
 		try {
 
@@ -251,7 +241,7 @@ public class PostgresPointService implements PointService {
 		updateString = updateString.replace(geometryEncoded_value_exp, createST_GeometryFromTextStatement(newPoint.getX(), newPoint.getY()));
 		updateString = updateString.replace(id_exp, idOfPointToBeUpdated);
 				
-		return executeUpdateStatement(updateString);
+		return this.connection.executeUpdateStatement(updateString);
 	}
 
 	@Override
@@ -259,7 +249,7 @@ public class PostgresPointService implements PointService {
 		    	
 		List<Point> result = new ArrayList<>();
 		
-    	ResultSet resultSet = executeQueryStatement(selectAllAggregatedMeasurementsString);
+    	ResultSet resultSet = this.connection.executeQueryStatement(selectAllAggregatedMeasurementsString);
 		
     	try {
 
@@ -379,7 +369,7 @@ public class PostgresPointService implements PointService {
 		String statement = "INSERT INTO " + measurementRelationsTableName
 				+ "(" + idField + ", " + aggregated_measurement_idField + ") VALUES ('"  + originalID + "', " + aggregatedID + ");";
 		
-		return executeUpdateStatement(statement);
+		return this.connection.executeUpdateStatement(statement);
 	}
 	
 	
@@ -397,43 +387,7 @@ public class PostgresPointService implements PointService {
 	}
 	
 	public boolean removePoint(String pointID, String tableName){
-		return executeUpdateStatement(deletePointFromTableString.replace(table_name_exp, tableName).concat("'" + pointID + "';"));
-	}
-	
-	private String getDatabaseName() {
-		
-		if(databaseName == null || databaseName.equals("")){			
-			this.databaseName = Properties.getProperty("databaseName").toString();
-		}
-		
-		return databaseName;
-	}
-
-	private String getDatabasePath() {
-		
-		if(databasePath == null || databasePath.equals("")){			
-			databasePath = Properties.getProperty("databasePath").toString();
-		}
-		
-		return databasePath;
-	}
-	
-	private String getDatabaseUsername() {
-		
-		if(username == null || username.equals("")){			
-			username = Properties.getProperty("username").toString();
-		}
-		
-		return username;
-	}
-	
-	private String getDatabasePassword() {
-		
-		if(password == null || password.equals("")){
-			this.password = Properties.getProperty("password").toString();
-		}
-		
-		return password;
+		return this.connection.executeUpdateStatement(deletePointFromTableString.replace(table_name_exp, tableName).concat("'" + pointID + "';"));
 	}
 	
 	private void updateValues(Point source, Point closestPointInRange){
@@ -589,40 +543,17 @@ public class PostgresPointService implements PointService {
 	}
 	
 	
-	private boolean createConnection() throws ClassNotFoundException {
-		Class.forName("org.postgresql.Driver");
-		connectionURL = "jdbc:postgresql:" + getDatabasePath() + "/"
-				+ getDatabaseName();
-
-		java.util.Properties props = new java.util.Properties();
-
-		props.setProperty("create", "true");
-		props.setProperty("user", getDatabaseUsername());
-		props.setProperty("password", getDatabasePassword());
-		conn = null;
-		try {
-			conn = DriverManager.getConnection(connectionURL, props);
-			conn.setAutoCommit(false);
-			LOGGER.info("Connected to measurement database.");
-		} catch (SQLException e) {
-			LOGGER.error("Could not connect to or create the database.", e);
-			return false;
-		}
-
-		return true;
-	}
-
 	private boolean createTable(String creationString, String tableName, boolean addToGeometryColumnTable) {
 		try {
 			ResultSet rs;
-			DatabaseMetaData meta = conn.getMetaData();
+			DatabaseMetaData meta = connection.getDatabasMetaData();
 			rs = meta
 					.getTables(null, null, tableName, new String[] { "TABLE" });
 			if (!rs.next()) {
 				LOGGER.info("Table " + tableName + " does not yet exist.");
-				executeUpdateStatement(creationString);
+				this.connection.executeUpdateStatement(creationString);
 
-				meta = conn.getMetaData();
+				meta = connection.getDatabasMetaData();
 
 				rs = meta.getTables(null, null, tableName,
 						new String[] { "TABLE" });
@@ -632,8 +563,8 @@ public class PostgresPointService implements PointService {
 					/*
 					 * add geometry column
 					 */
-					if(addToGeometryColumnTable){
-					    executeStatement(addGeometryColumnToTableString.replace(table_name_exp, tableName));
+					if (addToGeometryColumnTable){
+						this.connection.executeStatement(addGeometryColumnToTableString.replace(table_name_exp, tableName));
 					}
 					
 				} else {
@@ -649,67 +580,6 @@ public class PostgresPointService implements PointService {
 		return true;
 	}
 
-	private boolean executeStatement(String statement) {
-		Statement st = null;
-		try {
-			st = conn.createStatement();
-			st.execute(statement);
-
-		} catch (SQLException e) {
-			LOGGER.error("Execution of the following statement failed: "
-					+ statement + " cause: " + e.getMessage());
-			return false;
-		} finally {
-			try {
-				conn.commit();
-			} catch (SQLException e) {
-				LOGGER.warn(e.getMessage(), e);
-			}
-		}
-		return true;
-	}
-
-	private ResultSet executeQueryStatement(String statement) {
-		Statement st = null;
-		try {
-			st = conn.createStatement();
-			ResultSet resultSet = st.executeQuery(statement);
-
-			return resultSet;
-
-		} catch (SQLException e) {
-			LOGGER.error("Execution of the following statement failed: "
-					+ statement + " cause: " + e.getMessage());
-			return null;
-		} finally {
-			try {
-				conn.commit();
-			} catch (SQLException e) {
-				LOGGER.warn(e.getMessage(), e);
-			}
-		}
-	}
-
-	private boolean executeUpdateStatement(String statement) {
-		Statement st = null;
-		try {
-			st = conn.createStatement();
-			st.executeUpdate(statement);
-			
-		} catch (SQLException e) {
-			LOGGER.error("Execution of the following statement failed: "
-					+ statement + " cause: " + e.getMessage());
-			return false;
-		} finally {
-			try {
-				conn.commit();
-				st.close();
-			} catch (SQLException e) {
-				LOGGER.warn(e.getMessage(), e);
-			}
-		}
-		return true;
-	}
 
 	private int insertPoint(Point point) throws SQLException {
 		PreparedStatement statement = createInsertPointStatement(point);
@@ -791,21 +661,8 @@ public class PostgresPointService implements PointService {
 		String statement = "INSERT INTO " + aggregated_MeasurementsTableName
 				+ columnNameString + "VALUES" + sb.toString() + ";";
 		
-		PreparedStatement result = conn.prepareStatement(statement, PreparedStatement.RETURN_GENERATED_KEYS);
+		PreparedStatement result = connection.createPreparedStatement(statement, PreparedStatement.RETURN_GENERATED_KEYS, values);
 
-		int index = 1;
-		for (Object object : values) {
-			if (object instanceof String) {
-				result.setString(index++, object.toString());
-			}
-			else if (object instanceof Integer) {
-				result.setInt(index++, (int) object);
-			}
-			else if (object instanceof Double) {
-				result.setDouble(index++, (double) object);
-			}
-		}
-		
 		return result;
 	}	
 	
@@ -819,7 +676,7 @@ public class PostgresPointService implements PointService {
 				+ trackID + "', '" + iso8601DateFormat.format(new Date())
 				+ "');";
 
-		return executeUpdateStatement(statement);
+		return this.connection.executeUpdateStatement(statement);
 	}
 
 	@Override
@@ -827,7 +684,7 @@ public class PostgresPointService implements PointService {
 		String alreadyThere = "SELECT * FROM "+ aggregatedTracksTableName
 				+" WHERE " + idField +" = '"+trackID+"'";
 		
-		ResultSet rs = executeQueryStatement(alreadyThere);
+		ResultSet rs = this.connection.executeQueryStatement(alreadyThere);
 		try {
 			if (rs.next()) {
 				return true;

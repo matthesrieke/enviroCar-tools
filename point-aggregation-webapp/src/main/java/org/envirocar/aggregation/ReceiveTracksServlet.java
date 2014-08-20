@@ -99,7 +99,13 @@ public class ReceiveTracksServlet extends HttpServlet {
 			this.executor.submit(new Runnable() {
 
 				public void run() {
-					PointViaJsonMapIterator it = new PointViaJsonMapIterator(json);
+					PointViaJsonMapIterator it;
+					try {
+						it = new PointViaJsonMapIterator(json);
+					} catch (IOException e) {
+						logger.warn("Could not inizialize iterator. Skipping track.", e);
+						return;
+					}
 						
 					algorithm.runAlgorithm(it, it.getOriginalTrackId());
 				}
