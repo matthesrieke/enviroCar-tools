@@ -11,6 +11,6 @@
 	</filter-mapping>
 
 	<listener>
-		<listener-class>org.envirocar.aggregation.ReceiveTracksServlet$LocalGuiceServletConfig</listener-class>
+		<listener-class>org.envirocar.aggregation.AggregationGuiceServletConfig</listener-class>
 	</listener>
 </web-app>
