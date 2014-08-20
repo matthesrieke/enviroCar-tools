@@ -67,7 +67,7 @@ public class UpdateStatementTest {
 		/*
 		 * add measurement
 		 */
-		pointService.addToResultSet(oldPoint, false);
+		pointService.addToResultSet(oldPoint);
 		
 		String updatedID = "528bd8a3e4b09cecc5a6f445";
 		double updatedX = 7.6539;

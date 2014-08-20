@@ -22,6 +22,7 @@
  */
 package org.envirocar.analyse.util;
 
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +38,7 @@ public class PointViaJsonMapIterator implements Iterator<Point> {
 	private String trackID;
 
 	@SuppressWarnings("unchecked")
-	public PointViaJsonMapIterator(Map<?, ?> json) {
+	public PointViaJsonMapIterator(Map<?, ?> json) throws IOException {
 		this.features = (List<Object>) json.get("features");
 		Map<?, ?> properties = (Map<?, ?>) json.get("properties");
 		if (properties != null) {
@@ -46,7 +47,7 @@ public class PointViaJsonMapIterator implements Iterator<Point> {
 
 		if (this.features == null || this.features.isEmpty()
 				|| this.trackID == null) {
-			throw new IllegalArgumentException("Not a valid enviroCar track");
+			throw new IOException("Not a valid enviroCar track");
 		}
 	}
 

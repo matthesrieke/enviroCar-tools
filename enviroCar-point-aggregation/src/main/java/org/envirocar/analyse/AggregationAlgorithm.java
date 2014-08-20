@@ -135,10 +135,6 @@ public class AggregationAlgorithm {
 			Point nearestNeighbor = pointService.getNearestNeighbor(
 					nextPoint, distance);
 
-//			List<Point> pointList = new ArrayList<>();
-//			
-//			pointList.add(nextPoint);
-			
 			if (nearestNeighbor != null) {
 				
 				/*
@@ -149,8 +145,6 @@ public class AggregationAlgorithm {
 					continue;
 				}
 				
-//				pointList.add(nearestNeighbor);
-
 				/*
 				 * if there is one
 				 * 
@@ -159,21 +153,6 @@ public class AggregationAlgorithm {
 				 */
 				LOGGER.info("aggregating point: "+ nextPoint.getID());
 				pointService.aggregate(nextPoint, nearestNeighbor, trackId);
-
-//				pointList.add(aggregatedPoint);
-				
-				//TODO remove
-//				try {
-//					CSVExport.exportAsCSV(pointList, File.createTempFile(count + "-aggregation", ".csv").getAbsolutePath());
-//				} catch (IOException e) {
-//					LOGGER.error("Could not export resultSet as CSV:", e);
-//				}
-				/*
-				 * PointService replace point in resultSet with aggregated
-				 * point
-				 */
-//				pointService.updateResultSet(nearestNeighbor.getID(),
-//						aggregatedPoint);
 
 			} else {
 				/*
@@ -186,14 +165,7 @@ public class AggregationAlgorithm {
 				/*
 				 * add point to result set, give it a new id
 				 */
-				pointService.addToResultSet(nextPoint, true);
-
-				//TODO remove
-//				try {
-//					CSVExport.exportAsCSV(pointList, File.createTempFile(count + "-aggregation", ".csv").getAbsolutePath());
-//				} catch (IOException e) {
-//					LOGGER.error("Could not export resultSet as CSV:", e);
-//				}
+				pointService.addToResultSet(nextPoint);
 			}
 		}
 		
@@ -213,8 +185,13 @@ public class AggregationAlgorithm {
 		LOGGER.debug("");
 		LOGGER.debug("");
 		LOGGER.debug("");
-		LOGGER.debug("");		
+		LOGGER.debug("");
 
+		if (pointService.trackAlreadyAggregated(trackID)) {
+			LOGGER.info("Track already aggregated. skipping. "+trackID);
+			return;
+		}
+		
 		HttpGet get = new HttpGet(Properties.getRequestTrackURL()+trackID);
 		
 		HttpClient client;

@@ -22,12 +22,10 @@
  */
 package org.envirocar.analyse;
 
-import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -36,9 +34,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.bson.types.ObjectId;
 import org.envirocar.analyse.entities.InMemoryPoint;
 import org.envirocar.analyse.entities.Point;
+import org.envirocar.analyse.postgres.PostgresConnection;
 import org.envirocar.analyse.properties.Properties;
 import org.envirocar.analyse.util.Utils;
 import org.slf4j.Logger;
@@ -58,13 +56,10 @@ public class PostgresPointService implements PointService {
 	private static final Logger LOGGER = LoggerFactory
 			.getLogger(PostgresPointService.class);
 
-	private Connection conn = null;
-	private String connectionURL = null;
-	private String databaseName;
-	private String databasePath;
-															
-	private String username;
-	private String password;
+	private static final String CONTRIBUTING_COUNT_SUFFIX = "_contributing_count";
+
+	private PostgresConnection connection = null;
+
 	public static String aggregated_MeasurementsTableName = (String) Properties.getProperty("aggregated_MeasurementsTableName");
 	public static String original_MeasurementsTableName = (String) Properties.getProperty("original_MeasurementsTableName");																				
 	public static String measurementRelationsTableName = (String) Properties.getProperty("measurement_relationsTableName");
@@ -86,13 +81,13 @@ public class PostgresPointService implements PointService {
 	private final String geometryEncoded_value_exp = "$geometryEncoded_value$";
 
 	private String idField = "id";
-	private String generalNumberOfContributingPointsField = "generalnumberofcontributingpoints";
-	private String generalnumberOfContributingTracksField = "generalnumberofcontributingtracks";
+	private String contribPointCountField = "contributing_point_count";
+	private String contribTrackCountField = "contributing_track_count";
 	private String lastContributingTrackField = "lastcontributingtrack";
 	private String co2Field = "co2";
 	private String speedField = "speed";
-	private String co2NumberOfContributingPointsField = "co2numberofcontributingpoints";
-	private String speedNumberOfContributingPointsField = "speednumberofcontributingpoints";
+	private String co2NumberOfContributingPointsField = co2Field+CONTRIBUTING_COUNT_SUFFIX;
+	private String speedNumberOfContributingPointsField = speedField+CONTRIBUTING_COUNT_SUFFIX;
 	private String trackIDField = "trackid";
 	private String geometryEncodedField = "the_geom";
 	private String geometryPlainTextField = "text_geom";
@@ -104,9 +99,9 @@ public class PostgresPointService implements PointService {
 	
 	private final String pgCreationString = "CREATE TABLE "
 			+ aggregated_MeasurementsTableName + " ("
-			+ idField + " VARCHAR(24) NOT NULL PRIMARY KEY, "
-			+ generalNumberOfContributingPointsField + " INTEGER, "
-			+ generalnumberOfContributingTracksField + " INTEGER,"
+			+ idField + " SERIAL PRIMARY KEY, "
+			+ contribPointCountField + " INTEGER, "
+			+ contribTrackCountField + " INTEGER,"
 			+ lastContributingTrackField + " VARCHAR(24)," 
 			+ co2Field + " DOUBLE PRECISION," 
 			+ co2NumberOfContributingPointsField + " INTEGER, "
@@ -116,7 +111,7 @@ public class PostgresPointService implements PointService {
 	private final String pgMeasurementRelationsTableCreationString = "CREATE TABLE "
 			+ measurementRelationsTableName + " ("
 			+ idField + " VARCHAR(24) NOT NULL PRIMARY KEY, "
-			+ aggregated_measurement_idField + " VARCHAR(24), "
+			+ aggregated_measurement_idField + " INTEGER, "
 			+ "CONSTRAINT measurement_relations_aggregated_measurement_id_fkey FOREIGN KEY (" + aggregated_measurement_idField + ") "
 			+ "REFERENCES " + aggregated_MeasurementsTableName + " (" + idField + ") MATCH SIMPLE "
 			+ "ON UPDATE NO ACTION ON DELETE NO ACTION)";
@@ -126,7 +121,7 @@ public class PostgresPointService implements PointService {
 			+ idField + " VARCHAR(24) NOT NULL PRIMARY KEY, "
 			+ aggregation_dateField + " timestamp with time zone)";
 	
-	private String pgNearestNeighborCreationString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(" + geomFromText_exp + ",h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h "
+	private String pgNearestNeighborCreationString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + contribPointCountField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + contribTrackCountField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + ", ST_distance(" + geomFromText_exp + ",h.the_geom) as " + distField + " from " + aggregated_MeasurementsTableName + " h "
 			+ "where ST_DWithin(" + geomFromText_exp + ",h." + geometryEncodedField + ","
 			+ distance_exp + ") " + "order by " + distField + " ASC;";
 
@@ -134,11 +129,11 @@ public class PostgresPointService implements PointService {
 			+ table_name_exp
 			+ "', '" + geometryEncodedField + "', " + spatial_ref_sys + ", 'POINT', 2 );";
 	
-	private final String selectAllAggregatedMeasurementsString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + generalNumberOfContributingPointsField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + generalnumberOfContributingTracksField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + " from " + aggregated_MeasurementsTableName + " h; ";
+	private final String selectAllAggregatedMeasurementsString = "select h." + idField + ", h." + speedField + ", h." + co2Field + ", h." + contribPointCountField + ", h." + speedNumberOfContributingPointsField + ", h." + co2NumberOfContributingPointsField + ", h." + contribTrackCountField + ", h." + lastContributingTrackField + ", ST_AsText(h.the_geom) as " + geometryPlainTextField + " from " + aggregated_MeasurementsTableName + " h; ";
 	
 	private final String deletePointFromTableString = "delete from " + table_name_exp + " where " + idField + "=";
 	
-	private final String updateAggregatedMeasurementString = "UPDATE " + aggregated_MeasurementsTableName + " SET " + speedField + " = " + speed_value_exp + ", " + speedNumberOfContributingPointsField + " = " + speedNumberOfContributingPoints_value_exp + ", " + co2Field + " = " + co2_value_exp + ", " + co2NumberOfContributingPointsField + " = " + co2NumberOfContributingPoints_value_exp + ", " + generalNumberOfContributingPointsField + " = " + generalNumberOfContributingPoints_value_exp + ", " + generalnumberOfContributingTracksField + " = " + generalnumberOfContributingTracks_value_exp + ", " + lastContributingTrackField + " = '" + lastContributingTrack_value_exp + "', " + geometryEncodedField + " = " + geometryEncoded_value_exp + " WHERE " + idField + " = '" + id_exp + "';";
+	private final String updateAggregatedMeasurementString = "UPDATE " + aggregated_MeasurementsTableName + " SET " + speedField + " = " + speed_value_exp + ", " + speedNumberOfContributingPointsField + " = " + speedNumberOfContributingPoints_value_exp + ", " + co2Field + " = " + co2_value_exp + ", " + co2NumberOfContributingPointsField + " = " + co2NumberOfContributingPoints_value_exp + ", " + contribPointCountField + " = " + generalNumberOfContributingPoints_value_exp + ", " + contribTrackCountField + " = " + generalnumberOfContributingTracks_value_exp + ", " + lastContributingTrackField + " = '" + lastContributingTrack_value_exp + "', " + geometryEncodedField + " = " + geometryEncoded_value_exp + " WHERE " + idField + " = '" + id_exp + "';";
 	
 	private Geometry bbox;
 	
@@ -149,11 +144,8 @@ public class PostgresPointService implements PointService {
 	public PostgresPointService(Geometry bbox) {
 		this.bbox = bbox;
 		
-		try {
-			createConnection();
-		} catch (ClassNotFoundException e) {
-			throw new IllegalStateException(e);
-		}
+		this.connection = new PostgresConnection();
+		
 		createTable(pgCreationString, aggregated_MeasurementsTableName, true);
 		createTable(pgMeasurementRelationsTableCreationString, measurementRelationsTableName, false);		
 		createTable(pgAggregatedTracksTableCreationString, aggregatedTracksTableName, false);
@@ -165,7 +157,7 @@ public class PostgresPointService implements PointService {
 
 		String queryString = pgNearestNeighborCreationString.replace(distance_exp, "" + distance).replace(geomFromText_exp, createST_GeometryFromTextStatement(point.getX(), point.getY()));
 
-		ResultSet resultSet = executeQueryStatement(queryString);
+		ResultSet resultSet = this.connection.executeQueryStatement(queryString);
 
 		try {
 
@@ -173,7 +165,7 @@ public class PostgresPointService implements PointService {
 
 				while (resultSet.next()) {
 
-					String resultID = resultSet.getString(idField);
+					String resultID = Integer.toString(resultSet.getInt(idField));
 
 					Map<String, Object> propertyMap = new HashMap<>();
 					
@@ -196,7 +188,7 @@ public class PostgresPointService implements PointService {
 						propertyMap.put(propertyName, value);
 						
 						int pointsUsedForAggregation = resultSet.getInt(propertyName
-									.toLowerCase() + "numberofcontributingpoints");
+									.toLowerCase() + CONTRIBUTING_COUNT_SUFFIX);
 								
 						propertyPointsUsedForAggregationMap.put(propertyName, pointsUsedForAggregation);
 						
@@ -206,10 +198,10 @@ public class PostgresPointService implements PointService {
 							.getString(lastContributingTrackField);
 
 					int resultNumberOfContributingPoints = resultSet
-							.getInt(generalNumberOfContributingPointsField);
+							.getInt(contribPointCountField);
 
 					int resultNumberOfContributingTracks = resultSet
-							.getInt(generalnumberOfContributingTracksField);
+							.getInt(contribTrackCountField);
 
 					String resultGeomAsText = resultSet.getString(geometryPlainTextField);
 
@@ -249,7 +241,7 @@ public class PostgresPointService implements PointService {
 		updateString = updateString.replace(geometryEncoded_value_exp, createST_GeometryFromTextStatement(newPoint.getX(), newPoint.getY()));
 		updateString = updateString.replace(id_exp, idOfPointToBeUpdated);
 				
-		return executeUpdateStatement(updateString);
+		return this.connection.executeUpdateStatement(updateString);
 	}
 
 	@Override
@@ -257,7 +249,7 @@ public class PostgresPointService implements PointService {
 		    	
 		List<Point> result = new ArrayList<>();
 		
-    	ResultSet resultSet = executeQueryStatement(selectAllAggregatedMeasurementsString);
+    	ResultSet resultSet = this.connection.executeQueryStatement(selectAllAggregatedMeasurementsString);
 		
     	try {
 
@@ -307,7 +299,7 @@ public class PostgresPointService implements PointService {
 		LOGGER.debug("Aggregated: " + aggregatedPoint.getID() + " and " + nearestNeighborPoint.getID());
 		LOGGER.debug("NumberOfPoints " + aggregatedPoint.getNumberOfPointsUsedForAggregation());
 		
-		insertMeasurementRelation(point.getID(), nearestNeighborPoint.getID());
+		insertMeasurementRelation(point.getID(), Integer.parseInt(nearestNeighborPoint.getID()));
 		
 		/*
 		 * store result in DB
@@ -353,19 +345,17 @@ public class PostgresPointService implements PointService {
 	}
 
 	@Override
-	public void addToResultSet(Point newPoint, boolean allocateNewID) {
+	public void addToResultSet(Point newPoint) {
 		
-		String oldID = newPoint.getID();
-		
-		if(allocateNewID){
-			newPoint.setID(new ObjectId().toString());
+		int newId;
+		try {
+			newId = insertPoint(newPoint);
+		} catch (SQLException e) {
+			LOGGER.warn(e.getMessage(), e);
+			return;
 		}
 		
-		insertPoint(newPoint, false);
-		
-		if(allocateNewID){
-			insertMeasurementRelation(oldID, newPoint.getID());
-		}
+		insertMeasurementRelation(newPoint.getID(), newId);
 	}
 	
 	private String createST_GeometryFromTextStatement(double x, double y){
@@ -374,12 +364,12 @@ public class PostgresPointService implements PointService {
 				+ " " + y + ")', " + spatial_ref_sys + ")";		
 	}
 	
-	private boolean insertMeasurementRelation(String originalID, String aggregatedID){
+	private boolean insertMeasurementRelation(String originalID, int aggregatedID){
 	
 		String statement = "INSERT INTO " + measurementRelationsTableName
-				+ "(" + idField + ", " + aggregated_measurement_idField + ") VALUES ('"  + originalID + "', '" + aggregatedID + "');";
+				+ "(" + idField + ", " + aggregated_measurement_idField + ") VALUES ('"  + originalID + "', " + aggregatedID + ");";
 		
-		return executeUpdateStatement(statement);
+		return this.connection.executeUpdateStatement(statement);
 	}
 	
 	
@@ -397,43 +387,7 @@ public class PostgresPointService implements PointService {
 	}
 	
 	public boolean removePoint(String pointID, String tableName){
-		return executeUpdateStatement(deletePointFromTableString.replace(table_name_exp, tableName).concat("'" + pointID + "';"));
-	}
-	
-	private String getDatabaseName() {
-		
-		if(databaseName == null || databaseName.equals("")){			
-			this.databaseName = Properties.getProperty("databaseName").toString();
-		}
-		
-		return databaseName;
-	}
-
-	private String getDatabasePath() {
-		
-		if(databasePath == null || databasePath.equals("")){			
-			databasePath = Properties.getProperty("databasePath").toString();
-		}
-		
-		return databasePath;
-	}
-	
-	private String getDatabaseUsername() {
-		
-		if(username == null || username.equals("")){			
-			username = Properties.getProperty("username").toString();
-		}
-		
-		return username;
-	}
-	
-	private String getDatabasePassword() {
-		
-		if(password == null || password.equals("")){
-			this.password = Properties.getProperty("password").toString();
-		}
-		
-		return password;
+		return this.connection.executeUpdateStatement(deletePointFromTableString.replace(table_name_exp, tableName).concat("'" + pointID + "';"));
 	}
 	
 	private void updateValues(Point source, Point closestPointInRange){
@@ -520,11 +474,11 @@ public class PostgresPointService implements PointService {
 			try{
 			
 			int pointsUsedForAggregation = resultSet.getInt(propertyName
-						.toLowerCase() + "numberofcontributingpoints");
+						.toLowerCase() + CONTRIBUTING_COUNT_SUFFIX);
 					
 			propertyPointsUsedForAggregationMap.put(propertyName, pointsUsedForAggregation);
 			}catch(Exception e){
-				LOGGER.info("Column " + propertyName.toLowerCase() + "numberofcontributingpoints" + " not available.");
+				LOGGER.info("Column " + propertyName.toLowerCase() + CONTRIBUTING_COUNT_SUFFIX + " not available.");
 				LOGGER.info(e.getMessage());
 			}
 			
@@ -542,18 +496,18 @@ public class PostgresPointService implements PointService {
 		int resultNumberOfContributingPoints = 1;
 		
 		try {			
-			resultNumberOfContributingPoints = resultSet.getInt(generalNumberOfContributingPointsField);
+			resultNumberOfContributingPoints = resultSet.getInt(contribPointCountField);
 		} catch (SQLException e) {
-			LOGGER.info("Column " + generalNumberOfContributingPointsField + " not available. Defaulting to 1.");
+			LOGGER.info("Column " + contribPointCountField + " not available. Defaulting to 1.");
 			LOGGER.info(e.getMessage());
 		}
 		
 		int resultNumberOfContributingTracks = 1;
 		
 		try {			
-			resultNumberOfContributingTracks = resultSet.getInt(generalnumberOfContributingTracksField);			
+			resultNumberOfContributingTracks = resultSet.getInt(contribTrackCountField);			
 		} catch (SQLException e) {
-			LOGGER.info("Column " + generalnumberOfContributingTracksField + " not available. Defaulting to 1.");
+			LOGGER.info("Column " + contribTrackCountField + " not available. Defaulting to 1.");
 			LOGGER.info(e.getMessage());
 		}
 		
@@ -589,43 +543,17 @@ public class PostgresPointService implements PointService {
 	}
 	
 	
-	private boolean createConnection() throws ClassNotFoundException {
-		Class.forName("org.postgresql.Driver");
-		connectionURL = "jdbc:postgresql:" + getDatabasePath() + "/"
-				+ getDatabaseName();
-
-		java.util.Properties props = new java.util.Properties();
-
-		props.setProperty("create", "true");
-		props.setProperty("user", getDatabaseUsername());
-		props.setProperty("password", getDatabasePassword());
-		conn = null;
-		try {
-			conn = DriverManager.getConnection(connectionURL, props);
-			conn.setAutoCommit(false);
-			LOGGER.info("Connected to measurement database.");
-		} catch (SQLException e) {
-			LOGGER.error("Could not connect to or create the database.", e);
-			return false;
-		}
-
-		return true;
-	}
-
 	private boolean createTable(String creationString, String tableName, boolean addToGeometryColumnTable) {
 		try {
 			ResultSet rs;
-			DatabaseMetaData meta = conn.getMetaData();
+			DatabaseMetaData meta = connection.getDatabasMetaData();
 			rs = meta
 					.getTables(null, null, tableName, new String[] { "TABLE" });
 			if (!rs.next()) {
 				LOGGER.info("Table " + tableName + " does not yet exist.");
-				Statement st = conn.createStatement();
-				st.executeUpdate(creationString);
+				this.connection.executeUpdateStatement(creationString);
 
-				conn.commit();
-
-				meta = conn.getMetaData();
+				meta = connection.getDatabasMetaData();
 
 				rs = meta.getTables(null, null, tableName,
 						new String[] { "TABLE" });
@@ -635,8 +563,8 @@ public class PostgresPointService implements PointService {
 					/*
 					 * add geometry column
 					 */
-					if(addToGeometryColumnTable){
-					    executeStatement(addGeometryColumnToTableString.replace(table_name_exp, tableName));
+					if (addToGeometryColumnTable){
+						this.connection.executeStatement(addGeometryColumnToTableString.replace(table_name_exp, tableName));
 					}
 					
 				} else {
@@ -652,102 +580,49 @@ public class PostgresPointService implements PointService {
 		return true;
 	}
 
-	private boolean executeStatement(String statement) {
-		Statement st = null;
-		try {
-			st = conn.createStatement();
-			st.execute(statement);
 
-			conn.commit();
+	private int insertPoint(Point point) throws SQLException {
+		PreparedStatement statement = createInsertPointStatement(point);
+		int affectedRows = statement.executeUpdate();
 
-		} catch (SQLException e) {
-			LOGGER.error("Execution of the following statement failed: "
-					+ statement + " cause: " + e.getMessage());
-			return false;
-		} finally {
-			try {
-				conn.commit();
-			} catch (SQLException e) {
-				LOGGER.warn(e.getMessage(), e);
-			}
-		}
-		return true;
-	}
+        if (affectedRows == 0) {
+            throw new SQLException("Creating user failed, no rows affected.");
+        }
 
-	private ResultSet executeQueryStatement(String statement) {
-		Statement st = null;
-		try {
-			st = conn.createStatement();
-			ResultSet resultSet = st.executeQuery(statement);
-
-			return resultSet;
-
-		} catch (SQLException e) {
-			LOGGER.error("Execution of the following statement failed: "
-					+ statement + " cause: " + e.getMessage());
-			return null;
-		} finally {
-			try {
-				conn.commit();
-			} catch (SQLException e) {
-				LOGGER.warn(e.getMessage(), e);
-			}
-		}
-	}
-
-	private boolean executeUpdateStatement(String statement) {
-		Statement st = null;
-		try {
-			st = conn.createStatement();
-			st.executeUpdate(statement);
-
-			conn.commit();
-			st.close();
-		} catch (SQLException e) {
-			LOGGER.error("Execution of the following statement failed: "
-					+ statement + " cause: " + e.getMessage());
-			return false;
-		} finally {
-			try {
-				conn.commit();
-			} catch (SQLException e) {
-				LOGGER.warn(e.getMessage(), e);
-			}
-		}
-		return true;
-	}
-
-	private boolean insertPoint(Point point,  boolean checkIfExists) {
-
-		if(checkIfExists){
-			String statement = "select * from " + aggregated_MeasurementsTableName + " where "+ idField +"='" + point.getID() + "';";
-			
-			ResultSet rs = executeQueryStatement(statement);
-			
-			try {
-				if(rs.next()){
-					return false;
-				}
-			} catch (SQLException e) {
-				LOGGER.error("Could not check if row with id=" + point.getID() + " and "+ trackIDField +"=" + point.getLastContributingTrack() + " exists.", e);
-				return false;
-			}
-		}
-		
-		String statement = createInsertPointStatement(point);
-
-		return executeUpdateStatement(statement);
+        try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
+            if (generatedKeys.next()) {
+               return generatedKeys.getInt(1);
+            }
+            else {
+                throw new SQLException("Creating user failed, no ID obtained.");
+            }
+        }
 	}
 	
-	private String createInsertPointStatement(Point point) {
 
-		String columnNameString = "( "+ idField +", "+ geometryEncodedField +", "+ generalNumberOfContributingPointsField +", "+ generalnumberOfContributingTracksField +", "+ lastContributingTrackField +", ";
-		String valueString = "( '" + point.getID() + "', ST_GeomFromText('POINT(" + point.getX()
-				+ " " + point.getY() + ")', " + spatial_ref_sys + "), " + point.getNumberOfPointsUsedForAggregation()
-				+ ", " + point.getNumberOfTracksUsedForAggregation() + ", '" + point.getLastContributingTrack() + "', ";
-
+	private PreparedStatement createInsertPointStatement(Point point) throws SQLException {
+		String columnNameString = "( "+
+			geometryEncodedField +", "+
+			contribPointCountField +", "+
+			contribTrackCountField +", "+
+			lastContributingTrackField +", ";
+		
 		Iterator<String> propertyNameIterator = Properties
 				.getPropertiesOfInterestDatatypeMapping().keySet().iterator();
+		
+		List<Object> values = new ArrayList<>();
+		
+//		String valueString = "( ST_GeomFromText('POINT(" + point.getX() + " " + point.getY() + ")', " + spatial_ref_sys + "), " +
+//				point.getNumberOfPointsUsedForAggregation() + ", " +
+//				point.getNumberOfTracksUsedForAggregation() + ", '" +
+//				point.getLastContributingTrack() + "', ";
+		
+//		values.add(point.getX());
+//		values.add(point.getY());
+//		values.add(spatial_ref_sys);
+		values.add(new Integer(point.getNumberOfPointsUsedForAggregation()));
+		values.add(new Integer(point.getNumberOfTracksUsedForAggregation()));
+		values.add(point.getLastContributingTrack());
 
 		while (propertyNameIterator.hasNext()) {
 			String propertyName = (String) propertyNameIterator.next();
@@ -758,34 +633,37 @@ public class PostgresPointService implements PointService {
 			columnNameString = columnNameString.concat(", ");
 			
 			columnNameString = columnNameString.concat(propertyName
-					.toLowerCase() + "numberofcontributingpoints");
+					.toLowerCase() + CONTRIBUTING_COUNT_SUFFIX);
 			
 			Object o = point.getProperty(propertyName);
 			
-			valueString = valueString.concat(o == null? "" : String
-					.valueOf(o));
+			values.add(o == null? null : Double.parseDouble(o.toString()));
 			
-			valueString = valueString.concat(", ");
+			int v = point.getNumberOfPointsUsedForAggregation(propertyName);
 			
-			o = point.getNumberOfPointsUsedForAggregation(propertyName);
-			
-			valueString = valueString.concat(String
-					.valueOf(o == null? 0 : String
-							.valueOf(o)));
+			values.add(new Integer(v));
 
 			if (propertyNameIterator.hasNext()) {
 				columnNameString = columnNameString.concat(", ");
-				valueString = valueString.concat(", ");
 			} else {
 				columnNameString = columnNameString.concat(")");
-				valueString = valueString.concat(")");
 			}
 		}
-
+		
+		StringBuilder sb = new StringBuilder();
+		sb.append("(ST_GeomFromText('POINT("+point.getX()+" "+point.getY()+")', "+spatial_ref_sys+"),");
+		for (int i = 0; i < values.size(); i++) {
+			sb.append("?,");
+		}
+		sb.delete(sb.length()-1, sb.length());
+		sb.append(")");
+		
 		String statement = "INSERT INTO " + aggregated_MeasurementsTableName
-				+ columnNameString + "VALUES" + valueString + ";";
+				+ columnNameString + "VALUES" + sb.toString() + ";";
+		
+		PreparedStatement result = connection.createPreparedStatement(statement, PreparedStatement.RETURN_GENERATED_KEYS, values);
 
-		return statement;
+		return result;
 	}	
 	
 	public boolean insertTrackIntoAggregatedTracksTable(String trackID) {
@@ -798,7 +676,7 @@ public class PostgresPointService implements PointService {
 				+ trackID + "', '" + iso8601DateFormat.format(new Date())
 				+ "');";
 
-		return executeUpdateStatement(statement);
+		return this.connection.executeUpdateStatement(statement);
 	}
 
 	@Override
@@ -806,7 +684,7 @@ public class PostgresPointService implements PointService {
 		String alreadyThere = "SELECT * FROM "+ aggregatedTracksTableName
 				+" WHERE " + idField +" = '"+trackID+"'";
 		
-		ResultSet rs = executeQueryStatement(alreadyThere);
+		ResultSet rs = this.connection.executeQueryStatement(alreadyThere);
 		try {
 			if (rs.next()) {
 				return true;
