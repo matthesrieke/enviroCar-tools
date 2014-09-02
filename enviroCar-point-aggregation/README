@@ -1,0 +1,13 @@
+# envirCar point aggregation algorithm
+
+This algorithm aggregates enviroCar measurements currently based on distance weighting.
+It is currently using a Postgres database to store the final results.
+The algorithm can be executed using a bounding box and a distance.
+Only measurements in the bounding box will be considered for the aggregation.
+If a point lies in the specified distance to another point they will be aggregated.
+
+The algorithm can also be executed on a per-track basis. 
+It is currently used to display all enviroCar tracks on a ArcGIS online map [1].
+New tracks will automatically be aggregated and will be shown on the map quickly after upload.
+
+[1] http://www.arcgis.com/home/webmap/viewer.html?webmap=cf507fd7dbb5460cb7a86ec7e29c7087  
