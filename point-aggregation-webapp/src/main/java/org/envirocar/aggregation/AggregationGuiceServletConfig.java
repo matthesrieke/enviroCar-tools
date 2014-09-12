@@ -43,8 +43,8 @@ public class AggregationGuiceServletConfig extends GuiceServletContextListener {
 			protected void configureServlets() {
 				serve("/receiveTrack/*").with(ReceiveTracksServlet.class);
 				serve("/receiveTrack").with(ReceiveTracksServlet.class);
-				serve("/aggregatedTracks/*").with(AggregatedTracksServlet.class);
-				serve("/aggregatedTracks").with(AggregatedTracksServlet.class);
+				serve(AggregatedTracksServlet.PATH.concat("/*")).with(AggregatedTracksServlet.class);
+				serve(AggregatedTracksServlet.PATH).with(AggregatedTracksServlet.class);
 			}
 
 		});

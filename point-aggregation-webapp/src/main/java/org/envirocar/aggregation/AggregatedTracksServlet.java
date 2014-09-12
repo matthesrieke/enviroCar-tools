@@ -47,11 +47,13 @@ public class AggregatedTracksServlet extends HttpServlet {
 	 */
 	private static final long serialVersionUID = 1L;
 	private static final String AGGREGATION_DATE = "aggregation_date";
+	public static final String PATH = "/aggregatedTracks";
 	private PostgresConnection connection;
 	private String aggregatedTracksTableName;
 	private String query;
 	private SimpleDateFormat df;
 	private ObjectMapper om;
+	private String trackQuery;
 
 	@Override
 	public void init() throws ServletException {
@@ -63,6 +65,7 @@ public class AggregatedTracksServlet extends HttpServlet {
 				.getProperty("aggregatedTracksTableName");
 		this.query = "SELECT * FROM " + this.aggregatedTracksTableName
 				+ " ORDER BY " + AGGREGATION_DATE + " DESC LIMIT 100";
+		this.trackQuery = "SELECT * FROM "+ this.aggregatedTracksTableName +" WHERE id = '%s'";
 
 		TimeZone tz = TimeZone.getTimeZone("UTC");
 		df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
@@ -78,10 +81,23 @@ public class AggregatedTracksServlet extends HttpServlet {
 				resp.getOutputStream(), Charset.forName("UTF-8"));
 
 		resp.setContentType("application/json");
-
+		
+		String uri = req.getRequestURI();
+		String subPath = uri.substring(uri.indexOf(PATH) + PATH.length());
+		
+		String trackId = null;
+		if (!subPath.isEmpty() && !(subPath.length() == 1 && subPath.equals("/"))) {
+			trackId = subPath.startsWith("/") ? subPath.substring(1) : subPath;
+		}
+		
 		String json;
 		try {
-			json = createAggregatedTracksList();
+			if (trackId != null) {
+				json = createTrackExists(trackId);
+			}
+			else {
+				json = createAggregatedTracksList();
+			}
 		} catch (SQLException e) {
 			throw new IOException(e);
 		}
@@ -94,6 +110,18 @@ public class AggregatedTracksServlet extends HttpServlet {
 		resp.setStatus(200);
 	}
 
+	private String createTrackExists(String trackId) throws SQLException {
+		ResultSet rs = this.connection.executeQueryStatement(String.format(trackQuery, trackId));
+		
+		ObjectNode result = om.createObjectNode();
+
+		result.put("aggregated", rs.next());
+		
+		rs.close();
+		
+		return result.toString();
+	}
+	
 	private String createAggregatedTracksList() throws SQLException {
 		ResultSet rs = this.connection.executeQueryStatement(query);
 
