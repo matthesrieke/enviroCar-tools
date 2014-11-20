@@ -28,8 +28,13 @@ import java.io.IOException;
 import org.apache.http.client.ClientProtocolException;
 import org.envirocar.harvest.ProgressListener;
 import org.envirocar.harvest.TrackHarvester;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TrackHarvesterExecution {
+	
+	private static final Logger logger = LoggerFactory.getLogger(TrackHarvesterExecution.class);
 
 
 	public static void main(String[] args) throws ClientProtocolException,
@@ -46,11 +51,24 @@ public class TrackHarvesterExecution {
 
 			@Override
 			public void onProgressUpdate(float progressPercent) {
-				System.out.println(String.format("%f percent finished", progressPercent));
+				logger.info(String.format("%f percent finished", progressPercent));
 			}
 			
 		};
 		new TrackHarvester(consumerUrl, l).harvestTracks();
+	}
+	
+//	@Test
+	public void execute() throws ClientProtocolException, IOException {
+		ProgressListener l = new ProgressListener() {
+
+			@Override
+			public void onProgressUpdate(float progressPercent) {
+				System.out.println(String.format("%f percent finished", progressPercent));
+			}
+			
+		};
+		new TrackHarvester("http://localhost:8080/enviroCar-broker/", l).harvestTracks();
 	}
 	
 }
