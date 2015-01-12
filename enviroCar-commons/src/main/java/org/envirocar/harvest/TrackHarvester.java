@@ -52,6 +52,8 @@ public class TrackHarvester extends TrackPublisher {
 	private int processedTrackCount;
 
 	private List<TrackFilter> filters = new ArrayList<TrackFilter>();
+
+	private boolean active;
 	
 	public TrackHarvester(String consumerUrl, ProgressListener l, String baseTrackUrl) {
 		super(consumerUrl);
@@ -114,6 +116,18 @@ public class TrackHarvester extends TrackPublisher {
 
 		for (Object t : tracks) {
 			String id = (String) ((Map<?, ?>) t).get("id");
+			
+			
+//			if (id.equals("53fb5f88e4b04c314e7f3c18")) {
+//				logger.info("now parsing...");
+//				active = true;
+//				continue;
+//			}
+//			
+//			if (!active) {
+//				continue;
+//			}
+			
 			readAndPushTrack(id);
 			processedTrackCount++;
 			progressListener.onProgressUpdate(calculateProgress());
